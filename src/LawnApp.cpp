@@ -143,6 +143,7 @@ LawnApp::LawnApp()
 	mBuildNum = PVZP_BUILD_NUMBER;
 	mCommitDate = PVZP_COMMIT_DATE;
 	std::string aTitleName = "PvZ Portable";
+	aTitleName += " | pvz-lab dev"; // @ShadyLeeGamer: marks our build in the window title
 	mTitle = aTitleName;
 	mCustomCursorsEnabled = false;
 	mPlayerInfo = nullptr;

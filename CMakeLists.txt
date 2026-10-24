@@ -323,3 +323,13 @@ elseif (IOS)
 			PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 	endif()
 endif()
+
+# @ShadyLeeGamer: pvz-lab build tag for the main menu. Rewrites pvzlab_buildinfo.h (commit + build time)
+# on every build; PROJECT_BINARY_DIR is already on the include path.
+add_custom_target(PvzLabBuildInfo ALL
+	COMMAND ${CMAKE_COMMAND} "-DOUT=${PROJECT_BINARY_DIR}/pvzlab_buildinfo.h" "-DSRC=${PROJECT_SOURCE_DIR}"
+		-P "${PROJECT_SOURCE_DIR}/CMake/PvzLabBuildInfo.cmake"
+	BYPRODUCTS "${PROJECT_BINARY_DIR}/pvzlab_buildinfo.h"
+	COMMENT "Writing pvz-lab build tag"
+)
+add_dependencies(pvz-portable PvzLabBuildInfo)

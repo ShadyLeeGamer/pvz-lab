@@ -43,6 +43,7 @@
 #include "../../PvzpLib/PvzpParticle.h"
 #include "widget/Dialog.h"
 #include "widget/WidgetManager.h"
+#include "pvzlab_buildinfo.h" // @ShadyLeeGamer: generated on every build (PVZLAB_COMMIT, PVZLAB_BUILD_TIME)
 #include <algorithm>
 #include <format>
 
@@ -695,6 +696,12 @@ void GameSelector::DrawOverlay(Graphics* g)
 		if (aTrophyParticle)
 			aTrophyParticle->Draw(g);
 	}
+
+	// @ShadyLeeGamer: build tag, so it's obvious this is pvz-lab and which build it is.
+	// Dashes rather than "|": this font has no "|" glyph.
+	g->SetFont(Sexy::FONT_BRIANNETOD16);
+	g->SetColor(Color::White);
+	g->DrawString("pvz-lab dev - " PVZLAB_COMMIT " - built " PVZLAB_BUILD_TIME, 27, 594);
 
 	mToolTip->Draw(g);
 }
