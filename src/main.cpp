@@ -22,6 +22,9 @@
 #include "LawnApp.h"
 #include "Resources.h"
 #include "PvzpLib/PvzpStringFile.h"
+#ifdef PVZLAB
+#include "PvzLab/PvzLab.h" // @ShadyLeeGamer: pvz-lab extension
+#endif
 #include <cstdlib>
 #include <vector>
 using namespace Sexy;
@@ -97,7 +100,13 @@ int main(int argc, char** argv)
 	gLawnApp = new LawnApp();
 	gLawnApp->SetArgs(argc, argv);
 	gLawnApp->Init();
+#ifdef PVZLAB
+	PvzLab::Startup(); // @ShadyLeeGamer: pvz-lab: start the local API
+#endif
 	gLawnApp->Start();
+#ifdef PVZLAB
+	PvzLab::Shutdown(); // @ShadyLeeGamer: pvz-lab: stop the local API before the app is torn down
+#endif
 #ifndef __EMSCRIPTEN__
 	gLawnApp->Shutdown();
 	delete gLawnApp;

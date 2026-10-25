@@ -73,6 +73,9 @@
 #include "widget/Checkbox.h"
 #include "widget/Dialog.h"
 #include "SexyAppFramework/resource.h"
+#ifdef PVZLAB
+#include "PvzLab/PvzLab.h" // @ShadyLeeGamer: pvz-lab extension
+#endif
 
 bool gIsPartnerBuild = false;
 bool gSlowMo = false;
@@ -1286,6 +1289,11 @@ void LawnApp::HandleCmdLineParam(std::string_view theParamName, std::string_view
 		mDebugKeysEnabled = true;
 #endif
 	}
+#ifdef PVZLAB
+	else if (PvzLab::HandleCmdLineParam(theParamName, theParamValue)) // @ShadyLeeGamer: pvz-lab: -apiport=<n>
+	{
+	}
+#endif
 	else
 	{
 		SexyApp::HandleCmdLineParam(theParamName, theParamValue);
@@ -1596,6 +1604,9 @@ void LawnApp::UpdateFrames()
 		mMusic->MusicUpdate();
 
 		CheckForGameEnd();
+#ifdef PVZLAB
+		PvzLab::AfterTick(); // @ShadyLeeGamer: pvz-lab: copy the game state for the local API
+#endif
 	}
 }
 

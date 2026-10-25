@@ -1,0 +1,170 @@
+// pvz-lab: a plain-data copy of the game state, taken once per game tick.
+// No game headers here: Core is pure logic, so it can be unit-tested without the game.
+#pragma once
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace PvzLab
+{
+	// Bump when a field is removed or changes meaning. Adding fields doesn't need a bump.
+	inline constexpr int kApiVersion = 1;
+
+	// What a player sees of an object's health: the game swaps its art below 2/3 and below 1/3.
+	enum class Damage
+	{
+		None,
+		Damaged,
+		BadlyDamaged
+	};
+
+	struct Health
+	{
+		int								mCurrent = 0;
+		int								mMax = 0;
+	};
+
+	struct Tile
+	{
+		int								mCol = 0;
+		int								mRow = 0;
+	};
+
+	struct SeedPacketInfo
+	{
+		int								mSlot = 0;
+		std::string						mPlant;					// the game's own name, lowercase, e.g. "peashooter"
+		int								mPlantId = 0;			// the game's seed type number
+		std::string						mImitates;				// what an Imitater packet copies; empty otherwise
+		int								mCost = 0;
+		bool							mReady = false;			// the game's own check: recharged, affordable, requirements met
+		bool							mHeld = false;			// picked up and waiting to be planted
+		double							mRecharge = 1.0;		// 0..1, where 1 means fully recharged
+	};
+
+	struct PlantInfo
+	{
+		uint32_t						mId = 0;
+		std::string						mType;
+		int								mTypeId = 0;
+		std::string						mImitates;				// what an Imitater that hasn't changed yet will become
+		int								mCol = 0;
+		int								mRow = 0;
+		std::string						mLayer;					// "under", "normal", "pumpkin", "flying", or "none" while lifted
+		bool							mAsleep = false;
+		std::string						mState;					// visible states only, e.g. "armed", "chewing"; empty otherwise
+		std::optional<Damage>			mDamage;				// only for plants whose art shows damage
+		std::optional<Health>			mHealth;				// full view only
+	};
+
+	struct ArmorInfo
+	{
+		std::string						mType;					// e.g. "cone", "bucket", "screen_door"
+		Damage							mDamage = Damage::None;
+		std::optional<Health>			mHealth;				// full view only
+	};
+
+	struct ZombieInfo
+	{
+		uint32_t						mId = 0;
+		std::string						mType;
+		int								mTypeId = 0;
+		int								mRow = 0;
+		float							mX = 0.0f;
+		float							mY = 0.0f;
+		bool							mOnScreen = true;
+		bool							mEating = false;
+		bool							mSlowed = false;
+		bool							mFrozen = false;
+		bool							mButtered = false;
+		bool							mHypnotized = false;
+		bool							mInPool = false;
+		bool							mFlying = false;
+		bool							mUnderground = false;
+		bool							mHasArm = true;
+		bool							mHasHead = true;
+		std::optional<ArmorInfo>		mHelm;
+		std::optional<ArmorInfo>		mShield;
+		std::optional<Health>			mHealth;				// the body; full view only
+	};
+
+	struct SunInfo
+	{
+		uint32_t						mId = 0;
+		int								mValue = 0;
+		float							mX = 0.0f;
+		float							mY = 0.0f;
+		bool							mBeingCollected = false;
+	};
+
+	struct AwardInfo
+	{
+		uint32_t						mId = 0;
+		float							mX = 0.0f;
+		float							mY = 0.0f;
+	};
+
+	struct GridItemInfo
+	{
+		std::string						mType;					// "grave", "crater", "ladder", "rake", "vase"
+		int								mCol = 0;
+		int								mRow = 0;
+	};
+
+	struct MowerInfo
+	{
+		int								mRow = 0;
+		std::string						mKind;					// "lawn_mower", "pool_cleaner", "roof_cleaner", ...
+		std::string						mState;					// "rolling_in", "ready", "triggered", "squished"
+	};
+
+	struct LawnInfo
+	{
+		std::vector<std::string>		mRows;					// per row: "grass", "dirt" (can't plant), "water"
+		std::vector<GridItemInfo>		mItems;
+		std::vector<Tile>				mIce;					// tiles covered by a Zomboni's ice
+	};
+
+	struct ProgressInfo
+	{
+		int								mWave = 0;				// waves sent so far
+		int								mTotalWaves = 0;
+		double							mMeter = 0.0;			// the level progress bar, 0..1
+		bool							mHugeWaveIncoming = false;
+		std::optional<int>				mNextWaveIn;			// ticks until the next wave; full view only
+		std::optional<std::vector<std::vector<std::string>>> mUpcomingWaves;	// full view only
+	};
+
+	struct BoardInfo
+	{
+		int								mLevel = 0;				// Adventure level number; 0 outside Adventure
+		std::string						mLevelName;				// e.g. "1-1"
+		std::string						mStage;					// "day", "night", "pool", "fog", "roof", "boss", "other"
+		bool							mPaused = false;
+		uint32_t						mGameTicks = 0;			// game time; stops while paused or outside play
+		uint32_t						mBoardTicks = 0;		// ticks since the level started
+		std::string						mResult;				// "playing", "won", "lost"
+		int								mSun = 0;				// the number shown on screen
+		int								mSunSpendable = 0;		// includes sun still flying to the counter
+		std::vector<SeedPacketInfo>		mSeedPackets;
+		LawnInfo						mLawn;
+		std::vector<PlantInfo>			mPlants;
+		std::vector<ZombieInfo>			mZombies;
+		std::vector<SunInfo>			mSuns;
+		std::optional<AwardInfo>		mAward;					// the level-end award, once it has dropped
+		std::vector<MowerInfo>			mMowers;
+		ProgressInfo					mProgress;
+	};
+
+	struct Snapshot
+	{
+		bool							mFullView = true;		// false once PlayerView() has removed hidden information
+		uint32_t						mAppTicks = 0;			// ticks since the game started
+		std::string						mScene;					// "loading", "menu", "level_intro", "playing", ...
+		std::string						mMode;					// "adventure" or "other"
+		int								mModeId = 0;			// the game's own mode number
+		std::optional<BoardInfo>		mBoard;					// empty outside a level
+	};
+}

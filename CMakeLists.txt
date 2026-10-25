@@ -333,3 +333,42 @@ add_custom_target(PvzLabBuildInfo ALL
 	COMMENT "Writing pvz-lab build tag"
 )
 add_dependencies(pvz-portable PvzLabBuildInfo)
+
+# @ShadyLeeGamer: pvz-lab extension (src/PvzLab/), compiled into the game when PVZLAB is ON.
+# Off by default, so normal builds are unchanged. Desktop only. Dependencies come from the
+# vcpkg manifest feature "pvzlab" (-DVCPKG_MANIFEST_FEATURES=pvzlab).
+option(PVZLAB "Build the pvz-lab extension (local API for external tools)" OFF)
+if(PVZLAB AND (ANDROID OR IOS OR EMSCRIPTEN OR NINTENDO_SWITCH))
+	message(WARNING "PVZLAB is desktop-only and is ignored on this platform.")
+elseif(PVZLAB)
+	find_package(httplib CONFIG REQUIRED)
+	find_package(nlohmann_json CONFIG REQUIRED)
+
+	# Core: pure logic with no game headers, shared by the game and the unit tests.
+	file(GLOB PVZLAB_CORE_SOURCES CONFIGURE_DEPENDS src/PvzLab/Core/*.cpp)
+	add_library(pvzlab-core STATIC ${PVZLAB_CORE_SOURCES})
+	target_include_directories(pvzlab-core PUBLIC ${PROJECT_SOURCE_DIR}/src/PvzLab)
+	target_link_libraries(pvzlab-core PUBLIC nlohmann_json::nlohmann_json)
+	target_compile_features(pvzlab-core PUBLIC cxx_std_20)
+	if(MSVC)
+		target_compile_options(pvzlab-core PRIVATE /utf-8)
+	endif()
+
+	file(GLOB PVZLAB_SOURCES CONFIGURE_DEPENDS src/PvzLab/*.cpp)
+	target_sources(pvz-portable PRIVATE ${PVZLAB_SOURCES})
+	target_link_libraries(pvz-portable PRIVATE pvzlab-core httplib::httplib)
+	target_compile_definitions(pvz-portable PRIVATE PVZLAB)
+
+	option(PVZLAB_TESTS "Build the pvz-lab unit tests" ON)
+	if(PVZLAB_TESTS)
+		find_package(doctest CONFIG REQUIRED)
+		enable_testing()
+		file(GLOB PVZLAB_TEST_SOURCES CONFIGURE_DEPENDS tests/core/*.cpp)
+		add_executable(pvzlab-tests ${PVZLAB_TEST_SOURCES})
+		target_link_libraries(pvzlab-tests PRIVATE pvzlab-core doctest::doctest)
+		if(MSVC)
+			target_compile_options(pvzlab-tests PRIVATE /utf-8)
+		endif()
+		add_test(NAME pvzlab-core COMMAND pvzlab-tests)
+	endif()
+endif()

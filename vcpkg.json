@@ -8,5 +8,18 @@
       "platform": "!android"
     },
     "zlib"
-  ]
+  ],
+  "features": {
+    "pvzlab": {
+      "description": "pvz-lab extension (local API for external tools) and its unit tests",
+      "dependencies": [
+        {
+          "name": "cpp-httplib",
+          "default-features": false
+        },
+        "nlohmann-json",
+        "doctest"
+      ]
+    }
+  }
 }
