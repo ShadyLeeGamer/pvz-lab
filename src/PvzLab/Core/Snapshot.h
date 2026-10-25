@@ -42,6 +42,7 @@ namespace PvzLab
 		bool							mReady = false;			// the game's own check: recharged, affordable, requirements met
 		bool							mHeld = false;			// picked up and waiting to be planted
 		double							mRecharge = 1.0;		// 0..1, where 1 means fully recharged
+		std::vector<Tile>				mPlantableTiles;		// where the game's rules let it go right now
 	};
 
 	struct PlantInfo
@@ -158,6 +159,14 @@ namespace PvzLab
 		ProgressInfo					mProgress;
 	};
 
+	// The time dial (see Clock.h).
+	struct ClockInfo
+	{
+		std::string						mState;					// "running", "frozen", "stepping", "fast_forward"
+		int								mSpeed = 1;				// ticks per 10 ms frame while running; 1 = normal speed
+		std::optional<int>				mTicksLeft;				// while stepping
+	};
+
 	struct Snapshot
 	{
 		bool							mFullView = true;		// false once PlayerView() has removed hidden information
@@ -165,6 +174,9 @@ namespace PvzLab
 		std::string						mScene;					// "loading", "menu", "level_intro", "playing", ...
 		std::string						mMode;					// "adventure" or "other"
 		int								mModeId = 0;			// the game's own mode number
+		ClockInfo						mClock;
+		bool							mDialogOpen = false;	// a game dialog (options, game over, ...) is open
+		bool							mMinimized = false;		// game time stands still while the window is minimized
 		std::optional<BoardInfo>		mBoard;					// empty outside a level
 	};
 }

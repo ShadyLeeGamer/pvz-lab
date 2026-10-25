@@ -11,7 +11,7 @@ namespace PvzLab
 	class ApiServer
 	{
 	public:
-		explicit ApiServer(const Mailbox& theMailbox);
+		explicit ApiServer(Mailbox& theMailbox);
 		~ApiServer();
 
 		bool							Start(const char* theHost, int thePort);

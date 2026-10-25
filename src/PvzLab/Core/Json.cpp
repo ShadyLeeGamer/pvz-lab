@@ -34,6 +34,24 @@ namespace PvzLab
 			return Json{ { "current", theHealth.mCurrent }, { "max", theHealth.mMax } };
 		}
 
+		Json TilesJson(const std::vector<Tile>& theTiles)
+		{
+			Json aTiles = Json::array();
+			for (const Tile& aTile : theTiles)
+				aTiles.push_back(Json{ { "col", aTile.mCol }, { "row", aTile.mRow } });
+			return aTiles;
+		}
+
+		Json ClockJson(const ClockInfo& theClock)
+		{
+			Json aJson;
+			aJson["state"] = theClock.mState;
+			aJson["speed"] = theClock.mSpeed;
+			if (theClock.mTicksLeft)
+				aJson["ticksLeft"] = *theClock.mTicksLeft;
+			return aJson;
+		}
+
 		Json SeedPacketJson(const SeedPacketInfo& thePacket)
 		{
 			Json aJson;
@@ -46,6 +64,7 @@ namespace PvzLab
 			aJson["ready"] = thePacket.mReady;
 			aJson["held"] = thePacket.mHeld;
 			aJson["recharge"] = Round2(thePacket.mRecharge);
+			aJson["plantableTiles"] = TilesJson(thePacket.mPlantableTiles);
 			return aJson;
 		}
 
@@ -55,11 +74,7 @@ namespace PvzLab
 			for (const GridItemInfo& anItem : theLawn.mItems)
 				aItems.push_back(Json{ { "type", anItem.mType }, { "col", anItem.mCol }, { "row", anItem.mRow } });
 
-			Json anIce = Json::array();
-			for (const Tile& aTile : theLawn.mIce)
-				anIce.push_back(Json{ { "col", aTile.mCol }, { "row", aTile.mRow } });
-
-			return Json{ { "rows", theLawn.mRows }, { "items", aItems }, { "ice", anIce } };
+			return Json{ { "rows", theLawn.mRows }, { "items", aItems }, { "ice", TilesJson(theLawn.mIce) } };
 		}
 
 		Json PlantJson(const PlantInfo& thePlant)
@@ -192,6 +207,9 @@ namespace PvzLab
 		aJson["scene"] = theSnapshot.mScene;
 		aJson["mode"] = theSnapshot.mMode;
 		aJson["modeId"] = theSnapshot.mModeId;
+		aJson["clock"] = ClockJson(theSnapshot.mClock);
+		aJson["dialogOpen"] = theSnapshot.mDialogOpen;
+		aJson["minimized"] = theSnapshot.mMinimized;
 		aJson["board"] = theSnapshot.mBoard ? BoardJson(*theSnapshot.mBoard) : Json(nullptr);
 		return aJson.dump();
 	}
@@ -212,5 +230,51 @@ namespace PvzLab
 		Json aJson;
 		aJson["error"] = Json{ { "code", theCode }, { "message", theMessage } };
 		return aJson.dump();
+	}
+
+	std::string ReplyToJson(const Reply& theReply)
+	{
+		Json aJson;
+		if (theReply.mProblem)
+		{
+			const Problem& aProblem = *theReply.mProblem;
+			Json anError;
+			anError["code"] = ProblemName(aProblem.mCode);
+			anError["message"] = aProblem.mMessage;
+			if (!aProblem.mReason.empty())
+				anError["reason"] = aProblem.mReason;
+			if (aProblem.mCode == ProblemCode::BadSeeds)
+			{
+				anError["choices"] = aProblem.mChoices;
+				anError["pick"] = aProblem.mPick;
+			}
+			aJson["error"] = anError;
+			return aJson.dump();
+		}
+
+		aJson["ok"] = true;
+		aJson["appTicks"] = theReply.mAppTicks;
+		if (theReply.mPlant)
+		{
+			const PlacedPlant& aPlant = *theReply.mPlant;
+			aJson["plant"] = Json{ { "id", aPlant.mId }, { "type", aPlant.mType }, { "col", aPlant.mCol }, { "row", aPlant.mRow } };
+		}
+		if (theReply.mSunsCollected)
+			aJson["collected"] = *theReply.mSunsCollected;
+		if (theReply.mSunValue)
+			aJson["value"] = *theReply.mSunValue;
+		if (theReply.mLevel)
+		{
+			aJson["level"] = *theReply.mLevel;
+			aJson["levelName"] = theReply.mLevelName;
+		}
+		if (theReply.mClock)
+			aJson["clock"] = ClockJson(*theReply.mClock);
+		return aJson.dump();
+	}
+
+	int ReplyStatus(const Reply& theReply)
+	{
+		return theReply.mProblem ? HttpStatus(theReply.mProblem->mCode) : 200;
 	}
 }

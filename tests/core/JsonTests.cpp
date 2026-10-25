@@ -61,6 +61,58 @@ TEST_CASE("the full view's JSON includes the hidden fields")
 	CHECK(aBoard.at("progress").at("upcomingWaves").at(0).at(1) == "conehead_zombie");
 }
 
+TEST_CASE("snapshots carry the clock and where each packet can be planted")
+{
+	Snapshot aSnapshot = MakeLevelSnapshot();
+	aSnapshot.mClock = ClockInfo{ "stepping", 20, 15 };
+	aSnapshot.mBoard->mSeedPackets[0].mPlantableTiles = { { 0, 2 }, { 1, 2 } };
+
+	json aJson = json::parse(SnapshotToJson(PlayerView(aSnapshot)));
+	CHECK(aJson.at("clock").at("state") == "stepping");
+	CHECK(aJson.at("clock").at("speed") == 20);
+	CHECK(aJson.at("clock").at("ticksLeft") == 15);
+	CHECK(aJson.at("dialogOpen") == false);
+	const json& aTiles = aJson.at("board").at("seedPackets").at(0).at("plantableTiles");
+	REQUIRE(aTiles.size() == 2);
+	CHECK(aTiles.at(1).at("col") == 1);
+	CHECK(aTiles.at(1).at("row") == 2);
+}
+
+TEST_CASE("a successful reply says ok, with what happened")
+{
+	Reply aReply;
+	aReply.mAppTicks = 900;
+	aReply.mPlant = PlacedPlant{ 65536, "peashooter", 0, 2 };
+	json aJson = json::parse(ReplyToJson(aReply));
+	CHECK(ReplyStatus(aReply) == 200);
+	CHECK(aJson.at("ok") == true);
+	CHECK(aJson.at("appTicks") == 900);
+	CHECK(aJson.at("plant").at("type") == "peashooter");
+	CHECK(aJson.at("plant").at("row") == 2);
+	CHECK_FALSE(aJson.contains("clock"));
+}
+
+TEST_CASE("a refused request uses the error shape, with the game's reason")
+{
+	Reply aReply;
+	aReply.mProblem = CantPlantHere(PlacementReason::NotOnWater);
+	json aJson = json::parse(ReplyToJson(aReply));
+	CHECK(ReplyStatus(aReply) == 409);
+	CHECK_FALSE(aJson.contains("ok"));
+	CHECK(aJson.at("error").at("code") == "cant_plant_here");
+	CHECK(aJson.at("error").at("reason") == "not_on_water");
+	CHECK_FALSE(aJson.at("error").contains("choices"));
+
+	Problem aSeeds = MakeProblem(ProblemCode::BadSeeds);
+	aSeeds.mChoices = { "peashooter", "sunflower" };
+	aSeeds.mPick = 1;
+	Reply aSeedsReply;
+	aSeedsReply.mProblem = aSeeds;
+	json aSeedsJson = json::parse(ReplyToJson(aSeedsReply));
+	CHECK(aSeedsJson.at("error").at("choices").size() == 2);
+	CHECK(aSeedsJson.at("error").at("pick") == 1);
+}
+
 TEST_CASE("errors and health reports have a stable shape")
 {
 	json anError = json::parse(ErrorToJson("not_found", "no such route"));

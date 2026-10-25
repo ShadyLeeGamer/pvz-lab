@@ -5,14 +5,22 @@
 #include "Lawn/Board.h"
 #include "Lawn/Coin.h"
 #include "Lawn/CursorObject.h"
+#include "Lawn/CutScene.h"
 #include "Lawn/GridItem.h"
 #include "Lawn/LawnMower.h"
 #include "Lawn/Plant.h"
 #include "Lawn/SeedPacket.h"
+#include "Lawn/System/Music.h"
+#include "Lawn/System/PlayerInfo.h"
+#include "Lawn/Widget/SeedChooserScreen.h"
 #include "Lawn/Zombie.h"
+#include "widget/Dialog.h"
+#include "widget/WidgetManager.h"
 #include <algorithm>
 #include <cctype>
+#include <format>
 #include <unordered_map>
+#include <utility>
 
 namespace PvzLab
 {
@@ -24,13 +32,6 @@ namespace PvzLab
 			std::string aName = theName != nullptr ? theName : "";
 			std::ranges::transform(aName, aName.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 			return aName;
-		}
-
-		std::string PlantName(SeedType theType)
-		{
-			if (theType < 0 || theType >= SeedType::NUM_SEED_TYPES)
-				return {};
-			return Lowercase(GetPlantDefinition(theType).mPlantName);
 		}
 
 		std::string ZombieName(ZombieType theType)
@@ -177,12 +178,42 @@ namespace PvzLab
 				theType == SeedType::SEED_PUMPKINSHELL || theType == SeedType::SEED_GARLIC;
 		}
 
+		// What the packet plants: an Imitater plants the copy (as Board::GetSeedTypeInCursor does).
+		SeedType PlantedSeed(const SeedPacket& thePacket)
+		{
+			return thePacket.mPacketType == SeedType::SEED_IMITATER && thePacket.mImitaterType != SeedType::SEED_NONE
+				? thePacket.mImitaterType : thePacket.mPacketType;
+		}
+
+		int LawnRows(Board* theBoard)
+		{
+			return theBoard->StageHas6Rows() ? 6 : 5;
+		}
+
+		// Board::CanPlantAt for every tile: the same rules the game uses for a held seed.
+		std::vector<Tile> PlantableTiles(Board* theBoard, const SeedPacket& thePacket)
+		{
+			std::vector<Tile> aTiles;
+			SeedType aSeed = PlantedSeed(thePacket);
+			int aRows = LawnRows(theBoard);
+			for (int aRow = 0; aRow < aRows; aRow++)
+			{
+				for (int aCol = 0; aCol < MAX_GRID_SIZE_X; aCol++)
+				{
+					if (theBoard->CanPlantAt(aCol, aRow, aSeed) == PlantingReason::PLANTING_OK)
+						aTiles.push_back({ aCol, aRow });
+				}
+			}
+			return aTiles;
+		}
+
 		void CaptureSeedPackets(Board* theBoard, BoardInfo& theInfo)
 		{
 			SeedBank* aBank = theBoard->mSeedBank.get();
 			if (aBank == nullptr)
 				return;
 
+			bool aPlaying = theBoard->mApp->mGameScene == GameScenes::SCENE_PLAYING;
 			const CursorObject* aCursor = theBoard->mCursorObject.get();
 			for (int i = 0; i < aBank->mNumPackets; i++)
 			{
@@ -202,16 +233,20 @@ namespace PvzLab
 				if (aPacket.mActive)
 					aInfo.mRecharge = 1.0;
 				else if (aPacket.mRefreshing && aPacket.mRefreshTime > 0)
-					aInfo.mRecharge = std::clamp(static_cast<double>(aPacket.mRefreshCounter) / aPacket.mRefreshTime, 0.0, 1.0);
+					// Capped below 1: the game only activates the packet once the counter has passed the time,
+					// and "1" must mean ready to pick up, even after rounding.
+					aInfo.mRecharge = std::clamp(static_cast<double>(aPacket.mRefreshCounter) / aPacket.mRefreshTime, 0.0, 0.99);
 				else
 					aInfo.mRecharge = 0.0;
+				if (aPlaying)
+					aInfo.mPlantableTiles = PlantableTiles(theBoard, aPacket);
 				theInfo.mSeedPackets.push_back(std::move(aInfo));
 			}
 		}
 
 		void CaptureLawn(Board* theBoard, BoardInfo& theInfo)
 		{
-			int aRows = theBoard->StageHas6Rows() ? 6 : 5;
+			int aRows = LawnRows(theBoard);
 			for (int aRow = 0; aRow < aRows; aRow++)
 				theInfo.mLawn.mRows.push_back(RowName(theBoard->mPlantRow[aRow]));
 
@@ -411,6 +446,13 @@ namespace PvzLab
 		}
 	}
 
+	std::string PlantName(int theSeedType)
+	{
+		if (theSeedType < 0 || theSeedType >= SeedType::NUM_SEED_TYPES)
+			return {};
+		return Lowercase(GetPlantDefinition(static_cast<SeedType>(theSeedType)).mPlantName);
+	}
+
 	Snapshot CaptureSnapshot()
 	{
 		Snapshot aSnapshot;
@@ -419,9 +461,378 @@ namespace PvzLab
 		aSnapshot.mScene = SceneName(anApp->mGameScene);
 		aSnapshot.mModeId = anApp->mGameMode;
 		aSnapshot.mMode = anApp->mGameMode == GameMode::GAMEMODE_ADVENTURE ? "adventure" : "other";
+		aSnapshot.mDialogOpen = anApp->GetDialogCount() > 0;
+		aSnapshot.mMinimized = anApp->mMinimized;
 		// Re-read every tick: the board is null in menus and can be replaced between ticks.
 		if (anApp->mBoard != nullptr)
 			aSnapshot.mBoard = CaptureBoard(anApp, anApp->mBoard);
 		return aSnapshot;
+	}
+
+	// ---- Acting on the game ----
+
+	namespace
+	{
+		Reply Refuse(Problem theProblem)
+		{
+			Reply aReply;
+			aReply.mProblem = std::move(theProblem);
+			return aReply;
+		}
+
+		// What the game checks before a click reaches the lawn.
+		std::optional<Problem> CheckCanAct(LawnApp* theApp, Board* theBoard)
+		{
+			if (theBoard == nullptr || theApp->mGameScene != GameScenes::SCENE_PLAYING)
+				return MakeProblem(ProblemCode::NotPlaying);
+			if (theApp->GetDialogCount() > 0)
+				return MakeProblem(ProblemCode::DialogOpen);
+			if (theBoard->mPaused)
+				return MakeProblem(ProblemCode::Paused);
+			if (theBoard->mBoardFadeOutCounter >= 0)
+				return MakeProblem(ProblemCode::LevelEnding);
+			return std::nullopt;
+		}
+
+		PlacementReason ToPlacementReason(PlantingReason theReason)
+		{
+			switch (theReason)
+			{
+			case PlantingReason::PLANTING_ONLY_ON_GRAVES:	return PlacementReason::OnlyOnGraves;
+			case PlantingReason::PLANTING_ONLY_IN_POOL:		return PlacementReason::OnlyInPool;
+			case PlantingReason::PLANTING_ONLY_ON_GROUND:	return PlacementReason::OnlyOnGround;
+			case PlantingReason::PLANTING_NEEDS_POT:		return PlacementReason::NeedsPot;
+			case PlantingReason::PLANTING_NOT_ON_ART:		return PlacementReason::NotOnArt;
+			case PlantingReason::PLANTING_NOT_PASSED_LINE:	return PlacementReason::NotPassedLine;
+			case PlantingReason::PLANTING_NEEDS_UPGRADE:	return PlacementReason::NeedsUpgradeBase;
+			case PlantingReason::PLANTING_NOT_ON_GRAVE:		return PlacementReason::NotOnGrave;
+			case PlantingReason::PLANTING_NOT_ON_CRATER:	return PlacementReason::NotOnCrater;
+			case PlantingReason::PLANTING_NOT_ON_WATER:		return PlacementReason::NotOnWater;
+			case PlantingReason::PLANTING_NEEDS_GROUND:		return PlacementReason::NeedsGround;
+			case PlantingReason::PLANTING_NEEDS_SLEEPING:	return PlacementReason::NeedsSleeping;
+			default:										return PlacementReason::NotHere;
+			}
+		}
+
+		// SeedPacket::CanPickUp said no; work out which of its checks failed.
+		Problem WhyNotReady(LawnApp* theApp, Board* theBoard, const SeedPacket& thePacket)
+		{
+			if (theApp->IsSlotMachineLevel())
+				return MakeProblem(ProblemCode::NotReady, "seed packets can't be picked up on slot machine levels");
+			if (!thePacket.mActive)
+				return NotReady(PacketReason::Recharging);
+			int aCost = theBoard->GetCurrentPlantCost(thePacket.mPacketType, thePacket.mImitaterType);
+			if (!theBoard->CanTakeSunMoney(aCost) && !theBoard->HasConveyorBeltSeedBank())
+				return NotReady(PacketReason::NotEnoughSun);
+			return NotReady(PacketReason::NoBasePlant);
+		}
+
+		// A point on the tile that the game's own pixel-to-tile maths maps back to the same tile.
+		std::optional<std::pair<int, int>> TileClickPoint(Board* theBoard, int theCol, int theRow, SeedType theSeed)
+		{
+			int aX = theBoard->GridToPixelX(theCol, theRow) + 40;
+			int aTop = theBoard->GridToPixelY(theCol, theRow);
+			for (int anOffset : { 40, 50, 25, 60, 15, 70 })
+			{
+				int aY = aTop + anOffset;
+				if (theBoard->PlantingPixelToGridX(aX, aY, theSeed) == theCol && theBoard->PlantingPixelToGridY(aX, aY, theSeed) == theRow)
+					return std::make_pair(aX, aY);
+			}
+			return std::nullopt;
+		}
+
+		bool HoldingPacket(Board* theBoard, int theSlot)
+		{
+			const CursorObject* aCursor = theBoard->mCursorObject.get();
+			return aCursor->mCursorType == CursorType::CURSOR_TYPE_PLANT_FROM_BANK && aCursor->mSeedBankIndex == theSlot;
+		}
+
+		std::vector<uint32_t> PlantIdsAt(Board* theBoard, int theCol, int theRow)
+		{
+			std::vector<uint32_t> anIds;
+			for (Plant* aPlant : theBoard->mPlants)
+			{
+				if (!aPlant->mDead && aPlant->mIsOnBoard && aPlant->mPlantCol == theCol && aPlant->mRow == theRow)
+					anIds.push_back(theBoard->mPlants.DataArrayGetID(aPlant));
+			}
+			return anIds;
+		}
+
+		// Coins only take clicks while nothing is held (or with the Whack-a-Zombie hammer).
+		bool CursorCanClickCoins(Board* theBoard)
+		{
+			CursorType aCursor = theBoard->mCursorObject->mCursorType;
+			return aCursor == CursorType::CURSOR_TYPE_NORMAL || aCursor == CursorType::CURSOR_TYPE_HAMMER;
+		}
+	}
+
+	Reply Apply(const PlacePlant& theAction)
+	{
+		LawnApp* anApp = gLawnApp;
+		Board* aBoard = anApp->mBoard;
+		if (std::optional<Problem> aProblem = CheckCanAct(anApp, aBoard))
+			return Refuse(*aProblem);
+		// A player holding something can't pick up a packet without dropping it first.
+		if (aBoard->mCursorObject->mCursorType != CursorType::CURSOR_TYPE_NORMAL)
+			return Refuse(MakeProblem(ProblemCode::CursorBusy));
+
+		SeedBank* aBank = aBoard->mSeedBank.get();
+		if (aBank == nullptr || theAction.mSlot >= aBank->mNumPackets || aBank->mSeedPackets[theAction.mSlot].mPacketType == SeedType::SEED_NONE)
+			return Refuse(MakeProblem(ProblemCode::NoSuchSlot, std::format("there's no seed packet in slot {}", theAction.mSlot)));
+
+		SeedPacket& aPacket = aBank->mSeedPackets[theAction.mSlot];
+		SeedType aSeed = PlantedSeed(aPacket);
+		std::string aName = PlantName(aSeed);
+		if (!aPacket.CanPickUp())
+		{
+			Problem aProblem = WhyNotReady(anApp, aBoard, aPacket);
+			aProblem.mMessage = std::format("{} isn't ready: {}", aName, aProblem.mMessage);
+			return Refuse(aProblem);
+		}
+
+		// Checked before anything is clicked, so a refused plant changes nothing (and shows no hint).
+		PlantingReason aReason = theAction.mRow < LawnRows(aBoard)
+			? aBoard->CanPlantAt(theAction.mCol, theAction.mRow, aSeed) : PlantingReason::PLANTING_NOT_HERE;
+		if (aReason != PlantingReason::PLANTING_OK)
+		{
+			Problem aProblem = CantPlantHere(ToPlacementReason(aReason));
+			aProblem.mMessage = std::format("{} can't go at col {}, row {}: {}", aName, theAction.mCol, theAction.mRow, aProblem.mMessage);
+			return Refuse(aProblem);
+		}
+
+		std::optional<std::pair<int, int>> aPoint = TileClickPoint(aBoard, theAction.mCol, theAction.mRow, aSeed);
+		if (!aPoint)
+			return Refuse(MakeProblem(ProblemCode::Internal, "couldn't work out where to click on that tile"));
+		std::vector<uint32_t> aBefore = PlantIdsAt(aBoard, theAction.mCol, theAction.mRow);
+
+		// A player's two clicks: pick the packet up (this starts its recharge), then plant it.
+		aPacket.MouseDown(aPoint->first, aPoint->second, 1);
+		if (!HoldingPacket(aBoard, theAction.mSlot))
+			return Refuse(MakeProblem(ProblemCode::Internal, "the game didn't let the seed packet be picked up"));
+		aBoard->MouseDownWithPlant(aPoint->first, aPoint->second, 1);
+		if (HoldingPacket(aBoard, theAction.mSlot))
+		{
+			aBoard->MouseDownWithPlant(0, 0, -1);	// a right-click puts the packet back, as a player would
+			return Refuse(MakeProblem(ProblemCode::Internal, "the game didn't plant it, so the seed packet was put back"));
+		}
+
+		Reply aReply;
+		for (uint32_t anId : PlantIdsAt(aBoard, theAction.mCol, theAction.mRow))
+		{
+			if (std::ranges::find(aBefore, anId) == aBefore.end())
+			{
+				Plant* aPlant = aBoard->mPlants.DataArrayGet(anId);
+				aReply.mPlant = PlacedPlant{ anId, PlantName(aPlant->mSeedType), aPlant->mPlantCol, aPlant->mRow };
+				break;
+			}
+		}
+		return aReply;
+	}
+
+	Reply Apply(const CollectSun& theAction)
+	{
+		LawnApp* anApp = gLawnApp;
+		Board* aBoard = anApp->mBoard;
+		if (std::optional<Problem> aProblem = CheckCanAct(anApp, aBoard))
+			return Refuse(*aProblem);
+		if (!CursorCanClickCoins(aBoard))
+			return Refuse(MakeProblem(ProblemCode::CursorBusy));
+
+		std::vector<Coin*> aSuns;
+		if (theAction.mId)
+		{
+			Coin* aCoin = aBoard->mCoins.DataArrayTryToGet(*theAction.mId);
+			if (aCoin == nullptr || aCoin->mDead || !aCoin->IsSun() || aCoin->mIsBeingCollected)
+				return Refuse(MakeProblem(ProblemCode::NoSuchSun, std::format("there's no sun with id {} waiting to be collected", *theAction.mId)));
+			aSuns.push_back(aCoin);
+		}
+		else
+		{
+			for (Coin* aCoin : aBoard->mCoins)
+			{
+				if (!aCoin->mDead && aCoin->IsSun() && !aCoin->mIsBeingCollected)
+					aSuns.push_back(aCoin);
+			}
+		}
+
+		int aValue = 0;
+		for (Coin* aSun : aSuns)
+		{
+			aValue += aSun->GetSunValue();
+			aSun->MouseDown(0, 0, 1);	// a player's click on the sun
+		}
+		Reply aReply;
+		aReply.mSunsCollected = static_cast<int>(aSuns.size());
+		aReply.mSunValue = aValue;
+		return aReply;
+	}
+
+	Reply Apply(const CollectAward&)
+	{
+		LawnApp* anApp = gLawnApp;
+		Board* aBoard = anApp->mBoard;
+		if (std::optional<Problem> aProblem = CheckCanAct(anApp, aBoard))
+			return Refuse(*aProblem);
+		if (!CursorCanClickCoins(aBoard))
+			return Refuse(MakeProblem(ProblemCode::CursorBusy));
+
+		for (Coin* aCoin : aBoard->mCoins)
+		{
+			if (!aCoin->mDead && aCoin->IsLevelAward() && !aCoin->mIsBeingCollected)
+			{
+				aCoin->MouseDown(0, 0, 1);	// collecting it starts the level's ending
+				return Reply();
+			}
+		}
+		return Refuse(MakeProblem(ProblemCode::NoAward));
+	}
+
+	bool GameLoaded()
+	{
+		return gLawnApp->mLoaded;
+	}
+
+	std::optional<Problem> BeginLevel(std::optional<int> theLevel)
+	{
+		LawnApp* anApp = gLawnApp;
+		if (anApp->mPlayerInfo == nullptr)
+			return MakeProblem(ProblemCode::NoProfile);
+
+		// Only the dialogs the game itself closes when you start over: "game over" and "continue?".
+		for (Dialog* aDialog : anApp->mDialogList)
+		{
+			if (aDialog->mId != Dialogs::DIALOG_GAME_OVER && aDialog->mId != Dialogs::DIALOG_CONTINUE)
+				return MakeProblem(ProblemCode::DialogOpen, "a dialog is open in the game; close it first");
+		}
+		anApp->KillDialog(Dialogs::DIALOG_GAME_OVER);
+		anApp->KillDialog(Dialogs::DIALOG_CONTINUE);
+
+		// Leave the current screen the way the game's own buttons do.
+		if (anApp->mTitleScreen)
+			anApp->LoadingCompleted();		// the title screen's "click to start"
+		anApp->KillGameSelector();
+		anApp->KillAwardScreen();
+		anApp->KillChallengeScreen();
+		anApp->KillCreditScreen();
+		anApp->mMusic->StopAllMusic();
+		// As with the game's level-select cheat, a level left this way isn't kept to continue later.
+		if (anApp->mBoard != nullptr)
+			anApp->mBoardResult = BoardResult::BOARDRESULT_CHEAT;
+
+		if (theLevel)
+		{
+			anApp->mPlayerInfo->SetLevel(*theLevel);
+			anApp->WriteCurrentUserConfig();
+		}
+		// false: no "continue your game?" dialog; any saved level for this mode is erased.
+		anApp->PreNewGame(GameMode::GAMEMODE_ADVENTURE, false);
+		return std::nullopt;
+	}
+
+	IntroWait WhatIntroWaitsFor()
+	{
+		LawnApp* anApp = gLawnApp;
+		Board* aBoard = anApp->mBoard;
+		if (aBoard == nullptr)
+			return IntroWait::NoLevel;
+		if (anApp->GetDialogCount() > 0)
+			return IntroWait::Dialog;
+		if (anApp->mGameScene != GameScenes::SCENE_LEVEL_INTRO)
+			return IntroWait::Nothing;
+		if (aBoard->mCutScene->mSeedChoosing)
+			return IntroWait::SeedChooser;
+		if (anApp->mCrazyDaveMessageIndex != -1)
+			return IntroWait::CrazyDave;
+		if (aBoard->mCutScene->IsInShovelTutorial())
+			return IntroWait::ShovelTutorial;
+		return IntroWait::Nothing;
+	}
+
+	std::optional<Problem> ChooseSeeds(const std::vector<std::string>& theSeeds)
+	{
+		LawnApp* anApp = gLawnApp;
+		Board* aBoard = anApp->mBoard;
+		SeedChooserScreen* aChooser = anApp->mSeedChooserScreen.get();
+		if (aBoard == nullptr || aChooser == nullptr)
+			return MakeProblem(ProblemCode::Internal, "the seed chooser isn't open");
+
+		// What a player could click: seeds the profile has that are still in the chooser.
+		std::vector<std::string> aChoices;
+		std::vector<SeedType> aChoiceTypes;
+		for (int aType = 0; aType < SeedType::NUM_SEEDS_IN_CHOOSER; aType++)
+		{
+			SeedType aSeed = static_cast<SeedType>(aType);
+			if (aSeed == SeedType::SEED_IMITATER || !anApp->HasSeedType(aSeed) ||
+				aChooser->SeedNotAllowedToPick(aSeed) || aChooser->SeedNotAllowedDuringTrial(aSeed) ||
+				aChooser->mChosenSeeds[aSeed].mSeedState != ChosenSeedState::SEED_IN_CHOOSER)
+				continue;
+			aChoices.push_back(PlantName(aSeed));
+			aChoiceTypes.push_back(aSeed);
+		}
+		// On replays Crazy Dave has already filled some slots.
+		int aPick = aBoard->mSeedBank->mNumPackets - aChooser->mSeedsInBank;
+
+		std::string aMismatch;
+		std::vector<SeedType> aPicked;
+		for (const std::string& aName : theSeeds)
+		{
+			auto anIt = std::ranges::find(aChoices, aName);
+			if (anIt == aChoices.end())
+			{
+				aMismatch = std::format("\"{}\" isn't one of the seeds this level lets you pick", aName);
+				break;
+			}
+			aPicked.push_back(aChoiceTypes[anIt - aChoices.begin()]);
+		}
+		if (aMismatch.empty() && static_cast<int>(aPicked.size()) != aPick)
+			aMismatch = std::format("this level makes you choose {} seeds; \"seeds\" has {}", aPick, theSeeds.size());
+		if (!aMismatch.empty())
+		{
+			Problem aProblem = MakeProblem(ProblemCode::BadSeeds, aMismatch);
+			aProblem.mChoices = aChoices;
+			aProblem.mPick = aPick;
+			return aProblem;
+		}
+
+		// The chooser's own steps, as its "(Debug Play)" button runs them: pick, land, close.
+		for (SeedType aSeed : aPicked)
+			aChooser->ClickedSeedInChooser(aChooser->mChosenSeeds[aSeed]);
+		for (int aType = 0; aType < SeedType::NUM_SEEDS_IN_CHOOSER; aType++)
+			aChooser->LandFlyingSeed(aChooser->mChosenSeeds[aType]);
+		aChooser->CloseSeedChooser();
+		return std::nullopt;
+	}
+
+	bool PlayStarted()
+	{
+		LawnApp* anApp = gLawnApp;
+		return anApp->mBoard != nullptr && anApp->mGameScene == GameScenes::SCENE_PLAYING && anApp->mBoard->mMainCounter >= 1;
+	}
+
+	int CurrentLevel()
+	{
+		LawnApp* anApp = gLawnApp;
+		return anApp->mBoard != nullptr && anApp->IsAdventureMode() ? anApp->mBoard->mLevel : 0;
+	}
+
+	bool WindowMinimized()
+	{
+		return gLawnApp->mMinimized;
+	}
+
+	bool InsideNestedLoop()
+	{
+		// The main loop runs one UpdateAppStep deep; Dialog::WaitForResult runs more inside it.
+		return gLawnApp->mUpdateAppDepth > 1;
+	}
+
+	void RedrawAll()
+	{
+		gLawnApp->mWidgetManager->MarkAllDirty();
+	}
+
+	uint32_t AppTicks()
+	{
+		return gLawnApp->mAppCounter;
 	}
 }

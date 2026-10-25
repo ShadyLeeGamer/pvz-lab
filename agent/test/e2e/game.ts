@@ -63,6 +63,11 @@ export async function launchGame(config: GameConfig): Promise<RunningGame> {
   const port = await findFreePort();
   const game: ChildProcess = spawn(config.exe, ["-resdir", config.resDir, "-savedir", saveDir, `-apiport=${port}`], {
     stdio: "ignore",
+    // No console window for console builds. The game window still opens.
+    windowsHide: true,
+    // SDL then shows the game window without activating it, so tests never take the keyboard
+    // from whatever you're working in. Don't minimize the window: game time stops while minimized.
+    env: { ...process.env, SDL_WINDOW_NO_ACTIVATION_WHEN_SHOWN: "1" },
   });
   const baseUrl = `http://127.0.0.1:${port}`;
 

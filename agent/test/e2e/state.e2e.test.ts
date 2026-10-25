@@ -62,4 +62,23 @@ describe.skipIf(!config)("local API (launches the game; needs agent/.env)", () =
     const after = (await getJson(`${game!.baseUrl}/state`)).body.appTicks;
     expect(after).toBeGreaterThan(before);
   });
+
+  it("runs at normal speed when nothing has called the API", async () => {
+    const { body } = await getJson(`${game!.baseUrl}/state`);
+    expect(body.clock).toEqual({ state: "running", speed: 1 });
+    expect(body.dialogOpen).toBe(false);
+    expect(body.minimized).toBe(false);
+  });
+
+  it("rejects a malformed request with 400 and says what's wrong", async () => {
+    const response = await fetch(`${game!.baseUrl}/actions`, { method: "POST", body: '{"type":"placePlant","slot":0}' });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toEqual({ code: "bad_request", message: '"col" is missing' });
+  });
+
+  it("refuses actions while no level is being played", async () => {
+    const response = await fetch(`${game!.baseUrl}/actions`, { method: "POST", body: '{"type":"collectSun"}' });
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.code).toBe("not_playing");
+  });
 });

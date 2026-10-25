@@ -10,5 +10,12 @@ namespace PvzLab
 
 	void								Startup();		// after LawnApp::Init()
 	void								Shutdown();		// after the main loop has ended
-	void								AfterTick();	// at the end of every game tick, on the game thread
+
+	// Once per frame, before the game's tick loop: carries out API requests, then returns how many
+	// ticks to run this frame (theGameTicks is what the game would run by itself).
+	int									BeforeTicks(int theGameTicks);
+
+	// At the end of every tick: copies the game state for the API. Returns false to end this
+	// frame's ticks early, when a step or a level start has just finished.
+	bool								AfterTick();
 }

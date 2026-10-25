@@ -1585,6 +1585,9 @@ void LawnApp::UpdateFrames()
 	{
 		aUpdateCount = 20;
 	}
+#ifdef PVZLAB
+	aUpdateCount = PvzLab::BeforeTicks(aUpdateCount); // @ShadyLeeGamer: pvz-lab: carry out API requests, then freeze, step or fast-forward
+#endif
 
 	for (int i = 0; i < aUpdateCount; i++)
 	{
@@ -1605,7 +1608,8 @@ void LawnApp::UpdateFrames()
 
 		CheckForGameEnd();
 #ifdef PVZLAB
-		PvzLab::AfterTick(); // @ShadyLeeGamer: pvz-lab: copy the game state for the local API
+		if (!PvzLab::AfterTick()) // @ShadyLeeGamer: pvz-lab: copy the game state for the local API; stop when a step ends
+			break;
 #endif
 	}
 }
