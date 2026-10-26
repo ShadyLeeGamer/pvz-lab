@@ -33,7 +33,14 @@ namespace PvzLab
 	{
 	};
 
-	using Action = std::variant<PlacePlant, CollectSun, CollectAward>;
+	struct DigUp
+	{
+		int								mCol = 0;
+		int								mRow = 0;
+		std::string						mPlant;					// which plant on the tile, by name; empty: the main plant
+	};
+
+	using Action = std::variant<PlacePlant, CollectSun, CollectAward, DigUp>;
 
 	// Control: the time dial, and starting levels.
 	struct Freeze
@@ -72,6 +79,8 @@ namespace PvzLab
 		NoSuchSlot,
 		NotReady,
 		CantPlantHere,
+		NoShovel,
+		CantDigUp,
 		NoSuchSun,
 		NoAward,
 		NoProfile,
@@ -95,7 +104,8 @@ namespace PvzLab
 		int								mPick = 0;				// bad_seeds: how many to pick
 	};
 
-	struct PlacedPlant
+	// A plant an action planted or dug up.
+	struct PlantRef
 	{
 		uint32_t						mId = 0;
 		std::string						mType;
@@ -108,7 +118,7 @@ namespace PvzLab
 	{
 		std::optional<Problem>			mProblem;
 		uint32_t						mAppTicks = 0;			// when it was carried out or refused
-		std::optional<PlacedPlant>		mPlant;					// placePlant
+		std::optional<PlantRef>			mPlant;					// placePlant: the new plant; digUp: the plant dug up
 		std::optional<int>				mSunsCollected;			// collectSun
 		std::optional<int>				mSunValue;				// collectSun
 		std::optional<int>				mLevel;					// startLevel

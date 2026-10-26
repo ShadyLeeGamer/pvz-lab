@@ -35,6 +35,14 @@ Play the level to the end on your own. When a tool says the level is over, stop.
     expect(text).not.toMatch(/\{\w+\}/);
   });
 
+  it("tells a player with dig_up what digging up a plant does", () => {
+    const text = writeBrief(template, session({ level: "1-7", tools: ["get_state", "place_plant", "dig_up", "collect_sun", "wait"] }));
+    expect(text).toContain(
+      "- Planting costs sun. After each use, a seed packet recharges before you can plant from it again.\n" +
+        "- Digging up a plant with dig_up frees its tile, but gives no sun back.\n",
+    );
+  });
+
   it("in real time without wait, says the game keeps running and never mentions wait", () => {
     const text = writeBrief(template, session({ level: "1-7", clock: "realtime", tools: ["get_state", "place_plant", "collect_sun"] }));
     expect(text).toContain("Adventure level 1-7");

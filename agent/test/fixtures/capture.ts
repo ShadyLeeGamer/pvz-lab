@@ -79,6 +79,11 @@ try {
   if (refused.status !== 409) throw new Error(`expected the game to refuse row 0, got ${refused.status} ${JSON.stringify(refused.body)}`);
   keep("cant-plant-here", refused);
 
+  // The first time through Adventure, the shovel only comes in 1-5.
+  const noShovel = await send("/actions", { type: "digUp", col: 0, row: 2 });
+  if (noShovel.status !== 409) throw new Error(`expected 1-1 to have no shovel, got ${noShovel.status} ${JSON.stringify(noShovel.body)}`);
+  keep("no-shovel", noShovel);
+
   await save("1-1-zombie", await playUntil((s) => s.board.zombies.length > 0 && s.board.plants.length >= 2));
   await save("1-1-won", await playUntil((s) => s.board.award !== null));
 
@@ -96,7 +101,16 @@ try {
   const { choices, pick } = asked.body.error;
   await post("/control", { type: "startLevel", level: "1-8", seeds: choices.slice(0, pick) });
   await save("1-8-start", await state());
-  await save("1-8-midgame", await playUntil((s) => s.board.zombies.length >= 2 && s.board.plants.length >= 6));
+  const midgame = await playUntil((s) => s.board.zombies.length >= 2 && s.board.plants.length >= 6);
+  await save("1-8-midgame", midgame);
+
+  // The shovel: one of the plants, then a tile with nothing on it.
+  const dugPlant = midgame.board.plants[0];
+  keep("dug-up", await post("/actions", { type: "digUp", col: dugPlant.col, row: dugPlant.row }));
+  // Plants fill the lawn from the top left, so the bottom right is still empty.
+  const nothing = await send("/actions", { type: "digUp", col: 8, row: 4 });
+  if (nothing.status !== 409) throw new Error(`expected nothing to dig up at column 8, row 4, got ${nothing.status} ${JSON.stringify(nothing.body)}`);
+  keep("nothing-to-dig", nothing);
 
   // Lets sun pile up, so one collect_sun reply covers more than one sun.
   for (let i = 0; i < 60 && (await state()).board.suns.filter((sun: Json) => !sun.beingCollected).length < 2; i++) {

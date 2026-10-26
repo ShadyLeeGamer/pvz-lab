@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
 
-export const TOOL_NAMES = ["start_level", "get_state", "place_plant", "collect_sun", "wait"] as const;
+export const TOOL_NAMES = ["start_level", "get_state", "place_plant", "dig_up", "collect_sun", "wait"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 export const MAX_SPEED = 50; // the game's fastest speed (kMaxSpeed in Clock.h)
 

@@ -64,6 +64,9 @@ describe("the MCP server in a chat app (starts its own game; needs agent/.env)",
     expect(started.text.split("\n")[0], started.text).toBe("Level 1-8 started. The game is paused while you think.");
     const planted = await call("place_plant", { plant: "sunflower", col: 0, row: 2 });
     expect(planted.text.split("\n")[0], planted.text).toBe("Planted a sunflower at column 0, row 2.");
+    const dug = await call("dig_up", { col: 0, row: 2 });
+    expect(dug.text.split("\n")[0], dug.text).toBe("Dug up the sunflower at column 0, row 2.");
+    expect(dug.text).toMatch(/^row 2 {2}\. \. \. \. \. \. \. \. \.$/m);
   }, 120_000);
 
   it("closes its game, tidily, when the app closes the server", async () => {

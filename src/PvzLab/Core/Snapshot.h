@@ -149,6 +149,7 @@ namespace PvzLab
 		std::string						mResult;				// "playing", "won", "lost"
 		int								mSun = 0;				// the number shown on screen
 		int								mSunSpendable = 0;		// includes sun still flying to the counter
+		bool							mShovel = false;		// the shovel is there to dig up plants with (not in every level)
 		std::vector<SeedPacketInfo>		mSeedPackets;
 		LawnInfo						mLawn;
 		std::vector<PlantInfo>			mPlants;

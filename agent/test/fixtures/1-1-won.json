@@ -1,7 +1,7 @@
 {
   "apiVersion": 1,
   "view": "player",
-  "appTicks": 6687,
+  "appTicks": 6758,
   "scene": "playing",
   "mode": "adventure",
   "modeId": 0,
@@ -16,11 +16,12 @@
     "levelName": "1-1",
     "stage": "day",
     "paused": false,
-    "gameTicks": 5701,
-    "boardTicks": 6556,
+    "gameTicks": 5601,
+    "boardTicks": 6456,
     "result": "won",
     "sun": 75,
     "sunSpendable": 75,
+    "shovel": false,
     "seedPackets": [
       {
         "slot": 0,
@@ -102,8 +103,8 @@
     "suns": [],
     "award": {
       "id": 66191360,
-      "x": 631,
-      "y": 269
+      "x": 680,
+      "y": 292
     },
     "mowers": [
       {

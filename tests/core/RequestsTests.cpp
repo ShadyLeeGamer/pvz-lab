@@ -84,12 +84,33 @@ TEST_CASE("collectSun takes an optional sun id")
 	CHECK(std::holds_alternative<CollectAward>(ParseGoodAction(R"({"type":"collectAward"})")));
 }
 
+TEST_CASE("digUp reads its tile, and which plant when one is named")
+{
+	Action anAction = ParseGoodAction(R"({"type":"digUp","col":3,"row":2})");
+	REQUIRE(std::holds_alternative<DigUp>(anAction));
+	const DigUp& aDig = std::get<DigUp>(anAction);
+	CHECK(aDig.mCol == 3);
+	CHECK(aDig.mRow == 2);
+	CHECK(aDig.mPlant.empty());
+
+	Action aNamed = ParseGoodAction(R"({"type":"digUp","col":0,"row":5,"plant":"pumpkin"})");
+	REQUIRE(std::holds_alternative<DigUp>(aNamed));
+	CHECK(std::get<DigUp>(aNamed).mPlant == "pumpkin");
+	CHECK(std::get<DigUp>(aNamed).mRow == 5);
+
+	CHECK(ParseBadAction(R"({"type":"digUp","col":3})").mMessage == "\"row\" is missing");
+	CHECK(ParseBadAction(R"({"type":"digUp","col":9,"row":2})").mMessage == "\"col\" must be 0 to 8");
+	CHECK(ParseBadAction(R"({"type":"digUp","col":3,"row":2,"plant":""})").mMessage == "\"plant\" must be a plant's name, such as \"pumpkin\"");
+	CHECK(ParseBadAction(R"({"type":"digUp","col":3,"row":2,"plant":7})").mMessage == "\"plant\" must be a plant's name, such as \"pumpkin\"");
+	CHECK(ParseBadAction(R"({"type":"digUp","col":3,"row":2,"slot":0})").mMessage == "unknown field \"slot\"");
+}
+
 TEST_CASE("bodies that aren't a request object are refused")
 {
 	CHECK(ParseBadAction("not json").mMessage == "the body isn't valid JSON");
 	CHECK(ParseBadAction("[1, 2]").mMessage == "the body must be a JSON object");
 	CHECK(ParseBadAction(R"({"slot":1})").mMessage == "\"type\" is missing");
-	CHECK(ParseBadAction(R"({"type":"plant"})").mMessage == "unknown action \"plant\"; expected placePlant, collectSun or collectAward");
+	CHECK(ParseBadAction(R"({"type":"plant"})").mMessage == "unknown action \"plant\"; expected placePlant, digUp, collectSun or collectAward");
 	CHECK(ParseBadControl(R"({"type":"placePlant","slot":0,"col":0,"row":0})").mCode == ProblemCode::BadRequest);
 }
 
@@ -165,6 +186,11 @@ TEST_CASE("problems map to HTTP statuses: the request's fault, the game's state,
 	CHECK(HttpStatus(ProblemCode::Timeout) == 504);
 	CHECK(HttpStatus(ProblemCode::Internal) == 500);
 	CHECK(std::string(ProblemName(ProblemCode::CantPlantHere)) == "cant_plant_here");
+	CHECK(HttpStatus(ProblemCode::NoShovel) == 409);
+	CHECK(HttpStatus(ProblemCode::CantDigUp) == 409);
+	CHECK(std::string(ProblemName(ProblemCode::NoShovel)) == "no_shovel");
+	CHECK(std::string(ProblemName(ProblemCode::CantDigUp)) == "cant_dig_up");
+	CHECK(MakeProblem(ProblemCode::NoShovel).mMessage == "there's no shovel in this level");
 }
 
 TEST_CASE("placement and packet problems carry the game's reason")

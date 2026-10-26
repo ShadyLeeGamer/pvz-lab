@@ -3,7 +3,7 @@
   "seeds": ["sun_shroom", "puff_shroom", "fume_shroom", "grave_buster", "wall_nut", "cherry_bomb"],
   "clock": "realtime",
   "speed": 1,
-  "tools": ["get_state", "place_plant", "collect_sun"],
+  "tools": ["get_state", "place_plant", "dig_up", "collect_sun"],
   "brief": "../prompts/play.md",
   "maxTurns": 400
 }

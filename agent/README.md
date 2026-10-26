@@ -35,7 +35,8 @@ A session file in `sessions/` sets the level, the clock and the tools:
 - `speed`: how fast game time runs whenever it runs, from 1 (normal, the default) to 50.
   - With `"waits"`, it only changes how quickly each wait plays out.
   - With `"realtime"`, it also changes how much thinking time the player gets.
-- `tools`: any of `get_state`, `place_plant`, `collect_sun` and `wait`. The MCP server offers only these.
+- `tools`: any of `get_state`, `place_plant`, `dig_up`, `collect_sun` and `wait`. The MCP server offers only these.
+  - `dig_up` digs a plant up with the shovel. The game has no shovel in 1-1 to 1-4 the first time through Adventure, which every run is, so the sessions for those levels leave it out.
 - `brief`: the instructions the player starts with, usually `prompts/play.md`.
   - `{level}` and `{rules}` in it are filled in from the session, so the player is only told about its own clock, speed and tools.
   - The tools' own descriptions also match the clock.
@@ -89,6 +90,7 @@ Then ask, say, "play level 2-7". The game window opens at the first level. If th
 - End-to-end tests play real levels.
   - They start 1-1 from the title screen, plant, collect sun, and win it at high speed.
   - Then they move on to 1-2, start each level up to 1-7, and pick seeds on 1-8.
+  - They dig plants up with the shovel, including a pumpkin, the plant inside it and the flower pot under them on the roof, in the order the game allows.
   - Another drives the MCP server against the game, the way Claude Code does.
   - Another runs the server the way a chat app does: it starts its own game at `start_level`, asks for seeds with their costs, and closes the game when the app closes the server.
-  - A full run takes about 20 seconds.
+  - A full run takes about 40 seconds.

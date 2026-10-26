@@ -2,7 +2,7 @@
   "level": "1-7",
   "clock": "waits",
   "speed": 1,
-  "tools": ["get_state", "place_plant", "collect_sun", "wait"],
+  "tools": ["get_state", "place_plant", "dig_up", "collect_sun", "wait"],
   "brief": "../prompts/play.md",
   "maxTurns": 400
 }

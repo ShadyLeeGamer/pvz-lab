@@ -18,6 +18,7 @@ class StandInGame implements Game {
   readonly controls: Control[] = [];
   readonly replies: Record<Action["type"], Result> = {
     placePlant: reply("placed"),
+    digUp: reply("dug-up"),
     collectSun: reply("suns-collected"),
     collectAward: reply("award-collected"),
   };
@@ -58,7 +59,7 @@ class StandInStarter implements GameStarter {
   }
 }
 
-const ALL_TOOLS: ToolName[] = ["get_state", "place_plant", "collect_sun", "wait"];
+const ALL_TOOLS: ToolName[] = ["get_state", "place_plant", "dig_up", "collect_sun", "wait"];
 
 interface Options {
   clock?: "waits" | "realtime";
@@ -139,11 +140,42 @@ describe("MCP tools", () => {
     expect(game.actions).toEqual([]);
   });
 
+  it("dig_up asks the game to dig up the tile's plant, and says which plant came up", async () => {
+    const game = new StandInGame(fixture("1-8-midgame"));
+    const { text, isError } = await call(await connect(game), "dig_up", { col: 0, row: 0 });
+    expect(isError).toBe(false);
+    expect(game.actions).toEqual([{ type: "digUp", col: 0, row: 0 }]);
+    expect(text.split("\n")[0]).toBe("Dug up the sunflower at column 0, row 0.");
+    expect(text).toContain("Level 1-8 (day)");
+  });
+
+  it("dig_up passes a named plant on in the game's names", async () => {
+    const game = new StandInGame(fixture("1-8-midgame"));
+    await call(await connect(game), "dig_up", { col: 3, row: 2, plant: "Lily Pad" });
+    expect(game.actions).toEqual([{ type: "digUp", col: 3, row: 2, plant: "lily_pad" }]);
+  });
+
+  it("dig_up passes on the game's refusal", async () => {
+    const game = new StandInGame(fixture("1-1-start"));
+    const client = await connect(game);
+    game.replies.digUp = reply("no-shovel");
+    expect(await call(client, "dig_up", { col: 0, row: 2 })).toEqual({ text: "Not dug up: there's no shovel in this level.", isError: true });
+    game.replies.digUp = reply("nothing-to-dig");
+    expect(await call(client, "dig_up", { col: 8, row: 4 })).toEqual({ text: "Not dug up: there's nothing to dig up at column 8, row 4.", isError: true });
+  });
+
+  it("tells a player that can dig when the level has no shovel", async () => {
+    const withShovelTool = await call(await connect(new StandInGame(fixture("1-1-start"))), "get_state");
+    expect(withShovelTool.text).toContain("This level has no shovel, so nothing can be dug up.");
+    const without = await call(await connect(new StandInGame(fixture("1-1-start")), ["get_state"]), "get_state");
+    expect(without.text).not.toContain("shovel");
+  });
+
   it("collect_sun reports what it collected", async () => {
     const game = new StandInGame(fixture("1-8-midgame"));
     const { text } = await call(await connect(game), "collect_sun");
     expect(game.actions).toEqual([{ type: "collectSun" }]);
-    expect(text.split("\n")[0]).toBe("Collected 2 suns worth 50.");
+    expect(text.split("\n")[0]).toBe("Collected 3 suns worth 75.");
   });
 
   it("wait runs exactly the game time asked for while the game is paused, at the session's speed", async () => {
@@ -193,15 +225,16 @@ describe("MCP tools", () => {
       (await (await connect(new StandInGame(fixture("1-1-start")), ALL_TOOLS, { clock, speed: 1 })).listTools()).tools
         .filter((tool) => tool.name !== "wait")
         .map((tool) => tool.description ?? "");
-    expect(await descriptions("waits")).toEqual(Array(3).fill(expect.stringContaining("Game time doesn't move.")));
+    expect(await descriptions("waits")).toEqual(Array(4).fill(expect.stringContaining("Game time doesn't move.")));
     for (const description of await descriptions("realtime")) expect(description).not.toContain("Game time doesn't move");
   });
 
   it("refuses moves once the level is over", async () => {
     const game = new StandInGame(fixture("award-screen"));
-    const { text, isError } = await call(await connect(game), "place_plant", { plant: "peashooter", col: 0, row: 2 });
-    expect(isError).toBe(true);
-    expect(text).toBe("You won the level! The level is over, so you can stop playing.");
+    const client = await connect(game);
+    const over = { text: "You won the level! The level is over, so you can stop playing.", isError: true };
+    expect(await call(client, "place_plant", { plant: "peashooter", col: 0, row: 2 })).toEqual(over);
+    expect(await call(client, "dig_up", { col: 0, row: 2 })).toEqual(over);
     expect(game.actions).toEqual([]);
   });
 });
@@ -260,6 +293,7 @@ describe("start_level, for chat apps", () => {
     const client = await connect(game, CHAT_TOOLS, { starter: new StandInStarter() });
     expect(await call(client, "get_state")).toEqual({ text: NO_GAME_YET, isError: false });
     expect(await call(client, "place_plant", { plant: "peashooter", col: 0, row: 2 })).toEqual({ text: NO_GAME_YET, isError: true });
+    expect(await call(client, "dig_up", { col: 0, row: 2 })).toEqual({ text: NO_GAME_YET, isError: true });
     expect(await call(client, "wait", { seconds: 1 })).toEqual({ text: NO_GAME_YET, isError: true });
     expect(game.actions).toEqual([]);
     expect(game.controls).toEqual([]);

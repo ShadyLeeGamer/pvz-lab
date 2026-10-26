@@ -129,7 +129,11 @@ function plantNote(plant: Plant): string | undefined {
   return notes.length > 0 ? `- ${plant.type} at column ${plant.col}, row ${plant.row}: ${notes.join(", ")}` : undefined;
 }
 
-export function summarize(state: GameState): string {
+export interface SummaryOptions {
+  shovel?: boolean; // the player can dig plants up, so say when the level has no shovel
+}
+
+export function summarize(state: GameState, options: SummaryOptions = {}): string {
   const board = state.board;
   if (!board) {
     if (state.scene === "award") return "Level won! The game is showing the award screen.";
@@ -151,6 +155,7 @@ export function summarize(state: GameState): string {
   lines.push(`Sun: ${board.sunSpendable} to spend${flying > 0 ? ` (${flying} of it still flying to the counter)` : ""}.`);
 
   lines.push("", "Seed packets:", ...board.seedPackets.map((packet) => packetLine(packet, board.sunSpendable)));
+  if (options.shovel && !board.shovel) lines.push("This level has no shovel, so nothing can be dug up.");
 
   const lastRow = board.lawn.rows.length - 1;
   lines.push(

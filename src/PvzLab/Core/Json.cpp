@@ -161,6 +161,7 @@ namespace PvzLab
 			aJson["result"] = theBoard.mResult;
 			aJson["sun"] = theBoard.mSun;
 			aJson["sunSpendable"] = theBoard.mSunSpendable;
+			aJson["shovel"] = theBoard.mShovel;
 
 			Json aPackets = Json::array();
 			for (const SeedPacketInfo& aPacket : theBoard.mSeedPackets)
@@ -258,7 +259,7 @@ namespace PvzLab
 		aJson["appTicks"] = theReply.mAppTicks;
 		if (theReply.mPlant)
 		{
-			const PlacedPlant& aPlant = *theReply.mPlant;
+			const PlantRef& aPlant = *theReply.mPlant;
 			aJson["plant"] = Json{ { "id", aPlant.mId }, { "type", aPlant.mType }, { "col", aPlant.mCol }, { "row", aPlant.mRow } };
 		}
 		if (theReply.mSunsCollected)

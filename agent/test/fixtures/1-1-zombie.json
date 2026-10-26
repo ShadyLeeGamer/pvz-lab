@@ -1,7 +1,7 @@
 {
   "apiVersion": 1,
   "view": "player",
-  "appTicks": 2687,
+  "appTicks": 2658,
   "scene": "playing",
   "mode": "adventure",
   "modeId": 0,
@@ -16,11 +16,12 @@
     "levelName": "1-1",
     "stage": "day",
     "paused": false,
-    "gameTicks": 1701,
-    "boardTicks": 2556,
+    "gameTicks": 1501,
+    "boardTicks": 2356,
     "result": "playing",
     "sun": 0,
     "sunSpendable": 0,
+    "shovel": false,
     "seedPackets": [
       {
         "slot": 0,
@@ -29,7 +30,7 @@
         "cost": 100,
         "ready": false,
         "held": false,
-        "recharge": 0.67,
+        "recharge": 0.53,
         "plantableTiles": [
           {
             "col": 2,
@@ -99,7 +100,7 @@
         "type": "zombie",
         "typeId": 0,
         "row": 2,
-        "x": 749,
+        "x": 761,
         "y": 250,
         "onScreen": true,
         "eating": false,
@@ -120,8 +121,8 @@
       {
         "id": 65732608,
         "value": 25,
-        "x": 182,
-        "y": 86,
+        "x": 183,
+        "y": 63,
         "beingCollected": false
       }
     ],
@@ -136,7 +137,7 @@
     "progress": {
       "wave": 1,
       "totalWaves": 4,
-      "meter": 0.05,
+      "meter": 0.03,
       "hugeWaveIncoming": false
     }
   }

@@ -1,7 +1,7 @@
 {
   "apiVersion": 1,
   "view": "player",
-  "appTicks": 987,
+  "appTicks": 1158,
   "scene": "playing",
   "mode": "adventure",
   "modeId": 0,
@@ -21,6 +21,7 @@
     "result": "playing",
     "sun": 150,
     "sunSpendable": 150,
+    "shovel": false,
     "seedPackets": [
       {
         "slot": 0,

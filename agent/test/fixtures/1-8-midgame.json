@@ -1,7 +1,7 @@
 {
   "apiVersion": 1,
   "view": "player",
-  "appTicks": 14255,
+  "appTicks": 14527,
   "scene": "playing",
   "mode": "adventure",
   "modeId": 0,
@@ -16,11 +16,12 @@
     "levelName": "1-8",
     "stage": "day",
     "paused": false,
-    "gameTicks": 4801,
-    "boardTicks": 5662,
+    "gameTicks": 5001,
+    "boardTicks": 5862,
     "result": "playing",
-    "sun": 50,
-    "sunSpendable": 50,
+    "sun": 25,
+    "sunSpendable": 25,
+    "shovel": true,
     "seedPackets": [
       {
         "slot": 0,
@@ -188,7 +189,7 @@
         "cost": 50,
         "ready": false,
         "held": false,
-        "recharge": 0.27,
+        "recharge": 0.13,
         "plantableTiles": [
           {
             "col": 8,
@@ -506,7 +507,7 @@
         "cost": 50,
         "ready": false,
         "held": false,
-        "recharge": 0.27,
+        "recharge": 0.57,
         "plantableTiles": [
           {
             "col": 8,
@@ -665,7 +666,7 @@
         "cost": 25,
         "ready": false,
         "held": false,
-        "recharge": 0.9,
+        "recharge": 0.99,
         "plantableTiles": [
           {
             "col": 8,
@@ -1037,22 +1038,22 @@
       },
       {
         "id": 65929221,
-        "type": "sunflower",
-        "typeId": 1,
-        "col": 5,
-        "row": 0,
-        "layer": "normal",
-        "asleep": false
-      },
-      {
-        "id": 65994758,
         "type": "wall_nut",
         "typeId": 3,
-        "col": 6,
+        "col": 5,
         "row": 0,
         "layer": "normal",
         "asleep": false,
         "damage": "none"
+      },
+      {
+        "id": 65994758,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 6,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false
       },
       {
         "id": 66060295,
@@ -1069,9 +1070,9 @@
         "id": 66256903,
         "type": "zombie",
         "typeId": 0,
-        "row": 4,
-        "x": 758,
-        "y": 450,
+        "row": 0,
+        "x": 762,
+        "y": 50,
         "onScreen": true,
         "eating": false,
         "slowed": false,
@@ -1090,9 +1091,9 @@
         "id": 66191368,
         "type": "zombie",
         "typeId": 0,
-        "row": 3,
-        "x": 284,
-        "y": 350,
+        "row": 1,
+        "x": 431,
+        "y": 150,
         "onScreen": true,
         "eating": false,
         "slowed": false,
@@ -1140,7 +1141,7 @@
     "progress": {
       "wave": 2,
       "totalWaves": 10,
-      "meter": 0.12,
+      "meter": 0.11,
       "hugeWaveIncoming": false
     }
   }

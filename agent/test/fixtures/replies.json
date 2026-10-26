@@ -3,7 +3,7 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 1071,
+      "appTicks": 1158,
       "level": 1,
       "levelName": "1-1",
       "clock": {
@@ -22,11 +22,20 @@
       }
     }
   },
+  "no-shovel": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "no_shovel",
+        "message": "there's no shovel in this level"
+      }
+    }
+  },
   "placed": {
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 1071,
+      "appTicks": 1158,
       "plant": {
         "id": 65601536,
         "type": "peashooter",
@@ -39,7 +48,7 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 1171,
+      "appTicks": 1258,
       "clock": {
         "state": "frozen",
         "speed": 50
@@ -50,14 +59,14 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 5871
+      "appTicks": 6758
     }
   },
   "ran": {
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 7327,
+      "appTicks": 8214,
       "clock": {
         "state": "running",
         "speed": 1
@@ -92,13 +101,35 @@
       }
     }
   },
+  "dug-up": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 14527,
+      "plant": {
+        "id": 65601536,
+        "type": "sunflower",
+        "col": 0,
+        "row": 0
+      }
+    }
+  },
+  "nothing-to-dig": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "cant_dig_up",
+        "message": "there's nothing to dig up at column 8, row 4"
+      }
+    }
+  },
   "suns-collected": {
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 13640,
-      "collected": 2,
-      "value": 50
+      "appTicks": 14827,
+      "collected": 3,
+      "value": 75
     }
   },
   "game-hint": {
@@ -106,7 +137,7 @@
     "body": {
       "error": {
         "code": "cant_plant_here",
-        "message": "puff_shroom can't go at column 4, row 4: You can't plant on graves",
+        "message": "puff_shroom can't go at column 4, row 2: You can't plant on graves",
         "reason": "not_on_grave"
       }
     }

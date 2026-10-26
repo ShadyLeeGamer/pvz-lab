@@ -17,6 +17,7 @@ export function sessionRules({ clock, speed, tools }: Session): string[] {
     rules.push(`The game keeps running while you think: zombies keep walking and sun keeps falling, so the time between your moves is game time too.${fast}`);
   }
   if (has("place_plant")) rules.push("Planting costs sun. After each use, a seed packet recharges before you can plant from it again.");
+  if (has("dig_up")) rules.push("Digging up a plant with dig_up frees its tile, but gives no sun back.");
   rules.push(
     has("collect_sun")
       ? "Sun drops onto the lawn during play. Collect it, or it fades away after a while."

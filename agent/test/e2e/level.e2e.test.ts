@@ -77,6 +77,15 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
     expect(body.error).toMatchObject({ code: "not_ready", reason: "recharging", message: "peashooter isn't ready: it's still recharging (0% done)" });
   });
 
+  it("has no shovel in 1-1 the first time through Adventure, so digging up is refused", async () => {
+    const before = await api.state();
+    expect(before.board.shovel).toBe(false);
+    const { status, body } = await api.act({ type: "digUp", col: 0, row: 2 });
+    expect(status).toBe(409);
+    expect(body.error).toEqual({ code: "no_shovel", message: "there's no shovel in this level" });
+    expect((await api.state()).board.plants).toEqual(before.board.plants);
+  });
+
   it("steps exactly the ticks asked for, then freezes again", async () => {
     const before = await api.state();
     const { status, body } = await api.control({ type: "step", ticks: 100, speed: 10 });
@@ -190,6 +199,31 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
     expect(bowling.body.error.code).toBe("needs_input");
   }, 240_000);
 
+  it("from 1-6 on, digs up a plant with the shovel: the plant goes and no sun comes back", async () => {
+    const started = await api.control({ type: "startLevel", level: "1-6" });
+    expect(started.status, JSON.stringify(started.body)).toBe(200);
+    const state = await api.state();
+    expect(state.board.shovel).toBe(true);
+    const sunflower = state.board.seedPackets.find((packet: Json) => packet.plant === "sunflower");
+    const tile = sunflower.plantableTiles[0];
+    const planted = await api.act({ type: "placePlant", slot: sunflower.slot, col: tile.col, row: tile.row });
+    expect(planted.status, JSON.stringify(planted.body)).toBe(200);
+    const sunLeft = (await api.state()).board.sun;
+
+    const { status, body } = await api.act({ type: "digUp", col: tile.col, row: tile.row });
+    expect(status, JSON.stringify(body)).toBe(200);
+    expect(body.plant).toEqual({ id: planted.body.plant.id, type: "sunflower", col: tile.col, row: tile.row });
+    const after = await api.state();
+    expect(after.board.plants).toEqual([]);
+    expect(after.board.sun).toBe(sunLeft);
+
+    const nothing = await api.act({ type: "digUp", col: tile.col, row: tile.row });
+    expect(nothing.status).toBe(409);
+    expect(nothing.body.error).toEqual({ code: "cant_dig_up", message: `there's nothing to dig up at column ${tile.col}, row ${tile.row}` });
+    const offLawn = await api.act({ type: "digUp", col: 0, row: 5 });
+    expect(offLawn.body.error).toEqual({ code: "cant_dig_up", message: "the lawn only has rows 0 to 4" });
+  }, 150_000);
+
   it("on a level with a seed chooser, lists the choices, then plays with the seeds picked", async () => {
     const refused = await api.control({ type: "startLevel", level: "1-8" });
     expect(refused.status).toBe(409);
@@ -247,6 +281,60 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
     expect(dave.status).toBe(409);
     expect(dave.body.error.code).toBe("needs_input");
   }, 300_000);
+
+  it("digs up stacked plants the way a player's clicks do: the plant, a pumpkin by its rim, the pot last", async () => {
+    // Roof levels start with flower pots in the first three columns, so a tile there can hold a pot,
+    // a plant and a pumpkin.
+    const asked = await api.control({ type: "startLevel", level: "5-2" });
+    const { choices, pick } = asked.body.error;
+    const wanted = ["puff_shroom", "pumpkin"];
+    expect(choices).toEqual(expect.arrayContaining(wanted));
+    const seeds = [...wanted, ...choices.filter((choice: string) => !wanted.includes(choice))].slice(0, pick);
+    const started = await api.control({ type: "startLevel", level: "5-2", seeds });
+    expect(started.status, JSON.stringify(started.body)).toBe(200);
+
+    const [puff, pumpkin] = [0, 1];
+    const [col, row] = [0, 2]; // next to the house, where zombies take longest to reach
+    const plant = async (slot: number) => {
+      const planted = await api.act({ type: "placePlant", slot, col, row });
+      expect(planted.status, JSON.stringify(planted.body)).toBe(200);
+    };
+    const dig = (name?: string) => api.act({ type: "digUp", col, row, ...(name ? { plant: name } : {}) });
+    const onTile = async () =>
+      (await api.state()).board.plants
+        .filter((p: Json) => p.col === col && p.row === row)
+        .map((p: Json) => p.type)
+        .sort();
+
+    expect(await onTile()).toEqual(["flower_pot"]);
+    await plant(puff);
+    expect((await dig("flower_pot")).body.error).toEqual({ code: "cant_dig_up", message: "the puff_shroom on that flower_pot has to be dug up first" });
+
+    // The pumpkin costs 125 sun: collect what falls until it's ready.
+    let state = await api.state();
+    for (let i = 0; !state.board.seedPackets[pumpkin].ready; i++) {
+      expect(i, "the pumpkin should be ready within 300 steps").toBeLessThan(300);
+      if (state.board.suns.some((sun: Json) => !sun.beingCollected)) expect((await api.act({ type: "collectSun" })).status).toBe(200);
+      expect((await api.control({ type: "step", ticks: 50, speed: 50 })).status).toBe(200);
+      state = await api.state();
+    }
+    await plant(pumpkin);
+    expect(await onTile()).toEqual(["flower_pot", "puff_shroom", "pumpkin"]);
+
+    // No plant named: what a click on the middle of the tile digs up, the plant inside the pumpkin.
+    const middle = await dig();
+    expect(middle.body.plant, JSON.stringify(middle.body)).toMatchObject({ type: "puff_shroom", col, row });
+    expect(await onTile()).toEqual(["flower_pot", "pumpkin"]);
+    expect((await dig("flower_pot")).body.error.message).toBe("the pumpkin on that flower_pot has to be dug up first");
+
+    // The pumpkin by name, with a plant inside it again: the game digs it up when its rim is clicked.
+    await api.stepUntil((s) => s.board.seedPackets[puff].ready);
+    await plant(puff);
+    const rim = await dig("pumpkin");
+    expect(rim.body.plant, JSON.stringify(rim.body)).toMatchObject({ type: "pumpkin", col, row });
+    expect(await onTile()).toEqual(["flower_pot", "puff_shroom"]);
+    expect((await dig("pumpkin")).body.error.message).toBe(`there's no pumpkin at column ${col}, row ${row}, only a flower_pot and a puff_shroom`);
+  }, 150_000);
 
   it("explains refusals: the game's own hint where it has one, what a packet costs, and what's on a taken tile", async () => {
     const seeds = ["puff_shroom", "grave_buster", "sun_shroom", "fume_shroom", "wall_nut", "cherry_bomb"];

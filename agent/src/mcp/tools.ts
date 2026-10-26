@@ -1,5 +1,5 @@
-// The tools Claude plays with: look, plant, collect sun, let time pass. The game carries out every
-// move and decides what's allowed; these functions only translate and describe.
+// The tools Claude plays with: look, plant, dig up, collect sun, let time pass. The game carries out
+// every move and decides what's allowed; these functions only translate and describe.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -89,11 +89,12 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
   const enabled = new Set(tools);
   // Only true while the game waits for the player; in real time the game runs on during every call.
   const timeStands = context.clock === "waits" ? " Game time doesn't move." : "";
+  const summary = { shovel: enabled.has("dig_up") };
 
   // What a tool shows after acting: the game, or the end of the level if it ended meanwhile.
   const show = async (levelName?: string): Promise<string> => {
     const now = await look(context);
-    return levelIsOver(now.state) ? endOfLevel(now.state, now.levelName ?? levelName) : summarize(now.state);
+    return levelIsOver(now.state) ? endOfLevel(now.state, now.levelName ?? levelName) : summarize(now.state, summary);
   };
   // In a chat app nothing runs until the first start_level.
   const noGameYet = (): boolean => context.starter !== undefined && !context.starter.started;
@@ -127,7 +128,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
             if (!running.ok) return reply(`Level ${input.level} started, but time didn't start: ${running.error.message}.`, true);
           }
           const how = context.clock === "waits" ? "The game is paused while you think." : "The game is running.";
-          return reply(`Level ${input.level} started. ${how}\n\n${summarize(await game.state())}`);
+          return reply(`Level ${input.level} started. ${how}\n\n${summarize(await game.state(), summary)}`);
         }),
     );
   }
@@ -173,6 +174,36 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
           const result = await game.act({ type: "placePlant", slot: packet.slot, col: input.col, row: input.row });
           if (!result.ok) return reply(`Not planted: ${result.error.message}.`, true);
           return reply(`Planted a ${packet.plant} at column ${input.col}, row ${input.row}.\n\n${await show(levelName)}`);
+        }),
+    );
+  }
+
+  if (enabled.has("dig_up")) {
+    server.registerTool(
+      "dig_up",
+      {
+        title: "Dig up a plant",
+        description:
+          "Digs up one of your plants with the shovel, the way a player clicks the shovel and then the plant, to free its tile. " +
+          "You get no sun back. On a tile with more than one plant, it digs up the plant itself unless you name another, " +
+          "such as the pumpkin around it or the lily pad under it. If there's nothing to dig up, or the level has no shovel, " +
+          `the game refuses and says why.${timeStands}`,
+        inputSchema: {
+          col: z.number().int().min(0).max(8).describe("Column 0-8: 0 is next to your house, 8 is where zombies come in."),
+          row: z.number().int().min(0).max(5).describe("Row, counting from 0 at the top."),
+          plant: z.string().min(1).optional().describe("Which plant on the tile to dig up, e.g. pumpkin. Leave it out to dig up the plant itself."),
+        },
+      },
+      (input) =>
+        logged(context, "dig_up", input, async () => {
+          if (noGameYet()) return reply(NO_GAME_YET, true);
+          const { state, levelName } = await look(context);
+          if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
+          const plant = input.plant === undefined ? undefined : normalizePlantName(input.plant);
+          const result = await game.act({ type: "digUp", col: input.col, row: input.row, plant });
+          if (!result.ok) return reply(`Not dug up: ${result.error.message}.`, true);
+          const dug = result.reply.plant!;
+          return reply(`Dug up the ${dug.type} at column ${dug.col}, row ${dug.row}.\n\n${await show(levelName)}`);
         }),
     );
   }

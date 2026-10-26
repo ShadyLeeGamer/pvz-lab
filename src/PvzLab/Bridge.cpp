@@ -448,6 +448,7 @@ namespace PvzLab
 			}
 			aInfo.mSun = std::max(theBoard->mSunMoney, 0);
 			aInfo.mSunSpendable = SpendableSun(theBoard);
+			aInfo.mShovel = theBoard->mShowShovel;
 
 			CaptureSeedPackets(theBoard, aInfo);
 			CaptureLawn(theBoard, aInfo);
@@ -601,6 +602,21 @@ namespace PvzLab
 			return (aVowel ? "an " : "a ") + theName;
 		}
 
+		// The plants on a tile, for messages: "a peashooter", or "a peashooter, a pumpkin and a lily_pad".
+		std::string PlantsListed(Board* theBoard, int theCol, int theRow)
+		{
+			std::vector<std::string> aNames;
+			for (Plant* aPlant : theBoard->mPlants)
+			{
+				if (!aPlant->mDead && aPlant->mIsOnBoard && aPlant->mPlantCol == theCol && aPlant->mRow == theRow)
+					aNames.push_back(WithArticle(PlantName(aPlant->mSeedType)));
+			}
+			std::string aList;
+			for (size_t i = 0; i < aNames.size(); i++)
+				aList += (i == 0 ? "" : i + 1 < aNames.size() ? ", " : " and ") + aNames[i];
+			return aList;
+		}
+
 		// Why a plant can't go on a tile: the hint the game would show a player, in the game's own words,
 		// or, for the cases where the game shows none, what's on the tile.
 		std::string WhyNotHere(Board* theBoard, PlantingReason theReason, SeedType theSeed, int theCol, int theRow)
@@ -626,17 +642,8 @@ namespace PvzLab
 			if (theBoard->GetScaryPotAt(theCol, theRow))
 				return "there's a vase on that tile";
 
-			std::vector<std::string> aPlants;
-			for (Plant* aPlant : theBoard->mPlants)
-			{
-				if (!aPlant->mDead && aPlant->mIsOnBoard && aPlant->mPlantCol == theCol && aPlant->mRow == theRow)
-					aPlants.push_back(WithArticle(PlantName(aPlant->mSeedType)));
-			}
-			if (aPlants.size() == 1)
-				return std::format("there's already {} there", aPlants[0]);
-			if (aPlants.size() > 1)
-				return std::format("there's already {} and {} there", aPlants[0], aPlants[1]);
-			return "that plant can't go there";
+			std::string aPlants = PlantsListed(theBoard, theCol, theRow);
+			return aPlants.empty() ? "that plant can't go there" : std::format("there's already {} there", aPlants);
 		}
 
 		// A point on the tile that the game's own pixel-to-tile maths maps back to the same tile.
@@ -675,6 +682,34 @@ namespace PvzLab
 		{
 			CursorType aCursor = theBoard->mCursorObject->mCursorType;
 			return aCursor == CursorType::CURSOR_TYPE_NORMAL || aCursor == CursorType::CURSOR_TYPE_HAMMER;
+		}
+
+		// What a shovel click on the middle of a tile digs up: the plant itself, before a pumpkin around it
+		// or a lily pad or flower pot under it.
+		Plant* MainPlant(const PlantsOnLawn& theOnTile)
+		{
+			if (theOnTile.mNormalPlant)
+				return theOnTile.mNormalPlant;
+			return theOnTile.mPumpkinPlant ? theOnTile.mPumpkinPlant : theOnTile.mUnderPlant;
+		}
+
+		// A point a player could click with the shovel to dig up this plant: one where the game's own hit test
+		// picks it. Usually the middle of the tile; for a pumpkin its rim, for a coffee bean the top. (With the
+		// shovel held, Board::ToolHitTest skips the buttons and coins and comes down to these two calls.)
+		std::optional<std::pair<int, int>> DigClickPoint(Board* theBoard, Plant* thePlant)
+		{
+			for (int anOffsetY : { 40, 55, 25, 70, 10, 80, 0 })
+			{
+				for (int anOffsetX : { 40, 25, 55, 10, 70 })
+				{
+					int aX = thePlant->mX + anOffsetX;
+					int aY = thePlant->mY + anOffsetY;
+					HitResult aHit;
+					if (theBoard->MouseHitTestPlant(aX, aY, &aHit) && theBoard->ToolHitTestHelper(&aHit) == thePlant)
+						return std::make_pair(aX, aY);
+				}
+			}
+			return std::nullopt;
 		}
 	}
 
@@ -735,7 +770,7 @@ namespace PvzLab
 			if (std::ranges::find(aBefore, anId) == aBefore.end())
 			{
 				Plant* aPlant = aBoard->mPlants.DataArrayGet(anId);
-				aReply.mPlant = PlacedPlant{ anId, PlantName(aPlant->mSeedType), aPlant->mPlantCol, aPlant->mRow };
+				aReply.mPlant = PlantRef{ anId, PlantName(aPlant->mSeedType), aPlant->mPlantCol, aPlant->mRow };
 				break;
 			}
 		}
@@ -798,6 +833,74 @@ namespace PvzLab
 			}
 		}
 		return Refuse(MakeProblem(ProblemCode::NoAward));
+	}
+
+	Reply Apply(const DigUp& theAction)
+	{
+		LawnApp* anApp = gLawnApp;
+		Board* aBoard = anApp->mBoard;
+		if (std::optional<Problem> aProblem = CheckCanAct(anApp, aBoard))
+			return Refuse(*aProblem);
+		// A player holding something can't pick up the shovel without dropping it first.
+		if (aBoard->mCursorObject->mCursorType != CursorType::CURSOR_TYPE_NORMAL)
+			return Refuse(MakeProblem(ProblemCode::CursorBusy));
+		// The game leaves it out of some levels, such as 1-1 to 1-4 the first time through Adventure.
+		if (!aBoard->mShowShovel)
+			return Refuse(MakeProblem(ProblemCode::NoShovel));
+
+		// Checked before anything is clicked, so a refusal changes nothing.
+		int aCol = theAction.mCol;
+		int aRow = theAction.mRow;
+		if (aRow >= LawnRows(aBoard))
+			return Refuse(MakeProblem(ProblemCode::CantDigUp, std::format("the lawn only has rows 0 to {}", LawnRows(aBoard) - 1)));
+		PlantsOnLawn anOnTile;
+		aBoard->GetPlantsOnLawn(aCol, aRow, &anOnTile);
+		Plant* aTarget = MainPlant(anOnTile);
+		if (!theAction.mPlant.empty())
+		{
+			aTarget = nullptr;
+			for (Plant* aPlant : { anOnTile.mUnderPlant, anOnTile.mNormalPlant, anOnTile.mPumpkinPlant, anOnTile.mFlyingPlant })
+			{
+				if (aPlant != nullptr && PlantName(aPlant->mSeedType) == theAction.mPlant)
+					aTarget = aPlant;
+			}
+			if (aTarget == nullptr)
+			{
+				std::string anOthers = PlantsListed(aBoard, aCol, aRow);
+				return Refuse(MakeProblem(ProblemCode::CantDigUp, std::format("there's no {} at column {}, row {}{}",
+					theAction.mPlant, aCol, aRow, anOthers.empty() ? "" : ", only " + anOthers)));
+			}
+		}
+		if (aTarget == nullptr)
+			return Refuse(MakeProblem(ProblemCode::CantDigUp, std::format("there's nothing to dig up at column {}, row {}", aCol, aRow)));
+
+		std::string aName = PlantName(aTarget->mSeedType);
+		std::optional<std::pair<int, int>> aPoint = DigClickPoint(aBoard, aTarget);
+		if (!aPoint)
+		{
+			// The game's rule for stacked plants: whatever sits on a lily pad or flower pot goes first.
+			Plant* aCover = anOnTile.mNormalPlant ? anOnTile.mNormalPlant : anOnTile.mPumpkinPlant;
+			if (aTarget == anOnTile.mUnderPlant && aCover != nullptr)
+			{
+				return Refuse(MakeProblem(ProblemCode::CantDigUp, std::format("the {} on that {} has to be dug up first",
+					PlantName(aCover->mSeedType), aName)));
+			}
+			return Refuse(MakeProblem(ProblemCode::CantDigUp, std::format("the game doesn't let {} be dug up", WithArticle(aName))));
+		}
+
+		PlantRef aDug{ aBoard->mPlants.DataArrayGetID(aTarget), aName, aTarget->mPlantCol, aTarget->mRow };
+		// A player's two clicks: pick up the shovel (the game's own handler for a click on it), then the plant.
+		aBoard->PickUpTool(GameObjectType::OBJECT_TYPE_SHOVEL);
+		if (aBoard->mCursorObject->mCursorType != CursorType::CURSOR_TYPE_SHOVEL)
+			return Refuse(MakeProblem(ProblemCode::Internal, "the game didn't let the shovel be picked up"));
+		aBoard->MouseDownWithTool(aPoint->first, aPoint->second, 1, CursorType::CURSOR_TYPE_SHOVEL);
+		// The click puts the shovel back whatever happened.
+		if (!aTarget->mDead)
+			return Refuse(MakeProblem(ProblemCode::Internal, "the game didn't dig it up"));
+
+		Reply aReply;
+		aReply.mPlant = aDug;
+		return aReply;
 	}
 
 	bool GameLoaded()

@@ -20,6 +20,7 @@ namespace PvzLab
 	Reply Apply(const PlacePlant& theAction);
 	Reply Apply(const CollectSun& theAction);
 	Reply Apply(const CollectAward& theAction);
+	Reply Apply(const DigUp& theAction);
 
 	// Starting a level.
 	bool GameLoaded();

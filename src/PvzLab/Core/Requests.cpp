@@ -34,6 +34,8 @@ namespace PvzLab
 			case ProblemCode::NoSuchSlot:		return { "no_such_slot", 409, "there's no seed packet in that slot" };
 			case ProblemCode::NotReady:			return { "not_ready", 409, "that seed packet can't be picked up yet" };
 			case ProblemCode::CantPlantHere:	return { "cant_plant_here", 409, "that plant can't go there" };
+			case ProblemCode::NoShovel:			return { "no_shovel", 409, "there's no shovel in this level" };
+			case ProblemCode::CantDigUp:		return { "cant_dig_up", 409, "that can't be dug up" };
 			case ProblemCode::NoSuchSun:		return { "no_such_sun", 409, "there's no sun with that id waiting to be collected" };
 			case ProblemCode::NoAward:			return { "no_award", 409, "there's no award to collect" };
 			case ProblemCode::NoProfile:		return { "no_profile", 409, "there's no player profile yet; create one in the game first" };
@@ -232,7 +234,26 @@ namespace PvzLab
 				return *aFields.Error();
 			return CollectAward{};
 		}
-		return Bad(std::format("unknown action \"{}\"; expected placePlant, collectSun or collectAward", aType));
+		if (aType == "digUp")
+		{
+			aFields.Allow({ "col", "row", "plant" });
+			std::optional<int64_t> aCol = aFields.Number("col", 0, 8, true);
+			std::optional<int64_t> aRow = aFields.Number("row", 0, 5, true);
+			DigUp aDig;
+			if (auto aPlant = aJson.find("plant"); aPlant != aJson.end())
+			{
+				if (aPlant->is_string() && !aPlant->get<std::string>().empty())
+					aDig.mPlant = aPlant->get<std::string>();
+				else
+					aFields.Fail("\"plant\" must be a plant's name, such as \"pumpkin\"");
+			}
+			if (aFields.Error())
+				return *aFields.Error();
+			aDig.mCol = static_cast<int>(*aCol);
+			aDig.mRow = static_cast<int>(*aRow);
+			return aDig;
+		}
+		return Bad(std::format("unknown action \"{}\"; expected placePlant, digUp, collectSun or collectAward", aType));
 	}
 
 	std::variant<Control, Problem> ParseControl(std::string_view theBody)

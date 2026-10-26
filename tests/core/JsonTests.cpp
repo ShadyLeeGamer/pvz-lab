@@ -30,6 +30,7 @@ TEST_CASE("the player view's JSON leaves out hidden fields")
 	const json& aBoard = aJson.at("board");
 	CHECK(aBoard.at("levelName") == "1-1");
 	CHECK(aBoard.at("sun") == 150);
+	CHECK(aBoard.at("shovel") == false);
 	CHECK(aBoard.at("lawn").at("rows").at(2) == "grass");
 	CHECK(aBoard.at("seedPackets").at(0).at("plant") == "peashooter");
 
@@ -61,13 +62,15 @@ TEST_CASE("the full view's JSON includes the hidden fields")
 	CHECK(aBoard.at("progress").at("upcomingWaves").at(0).at(1) == "conehead_zombie");
 }
 
-TEST_CASE("snapshots carry the clock and where each packet can be planted")
+TEST_CASE("snapshots carry the clock, the shovel and where each packet can be planted")
 {
 	Snapshot aSnapshot = MakeLevelSnapshot();
 	aSnapshot.mClock = ClockInfo{ "stepping", 20, 15 };
+	aSnapshot.mBoard->mShovel = true;
 	aSnapshot.mBoard->mSeedPackets[0].mPlantableTiles = { { 0, 2 }, { 1, 2 } };
 
 	json aJson = json::parse(SnapshotToJson(PlayerView(aSnapshot)));
+	CHECK(aJson.at("board").at("shovel") == true);
 	CHECK(aJson.at("clock").at("state") == "stepping");
 	CHECK(aJson.at("clock").at("speed") == 20);
 	CHECK(aJson.at("clock").at("ticksLeft") == 15);
@@ -82,7 +85,7 @@ TEST_CASE("a successful reply says ok, with what happened")
 {
 	Reply aReply;
 	aReply.mAppTicks = 900;
-	aReply.mPlant = PlacedPlant{ 65536, "peashooter", 0, 2 };
+	aReply.mPlant = PlantRef{ 65536, "peashooter", 0, 2 };
 	json aJson = json::parse(ReplyToJson(aReply));
 	CHECK(ReplyStatus(aReply) == 200);
 	CHECK(aJson.at("ok") == true);

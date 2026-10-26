@@ -18,17 +18,17 @@ describe("summarize", () => {
     const text = summarize(fixture("1-1-zombie"));
     expect(text).toMatch(/^row 2 {2}P P \. \. \. \. \. \. \. Z$/m);
     expect(text).toContain("- row 2: zombie walking in from the right");
-    expect(text).toContain("- peashooter: 100 sun. Recharging, 67% done; then needs 100 more sun.");
+    expect(text).toContain("- peashooter: 100 sun. Recharging, 53% done; then needs 100 more sun.");
     expect(text).toContain("Suns waiting to be collected: 1 (25 sun).");
     expect(text).toContain("Lawnmowers left in rows: 2.");
   });
 
   it("puts each zombie in its row and column, and lists the plants worth knowing about", () => {
     const text = summarize(fixture("1-8-midgame"));
-    expect(text).toMatch(/^row 0 {2}S S S M S S W S \.$/m);
-    expect(text).toMatch(/^row 3 {2}\. \. \. Z \. \. \. \. \.$/m);
-    expect(text).toContain("- row 3: zombie at column 3");
-    expect(text).toContain("- row 4: zombie walking in from the right");
+    expect(text).toMatch(/^row 0 {2}S S S M S W S S \. Z$/m);
+    expect(text).toMatch(/^row 1 {2}\. \. \. \. \. Z \. \. \.$/m);
+    expect(text).toContain("- row 1: zombie at column 5");
+    expect(text).toContain("- row 0: zombie walking in from the right");
     expect(text).toContain("- potato_mine at column 3, row 0: armed");
     expect(text).toContain("Suns waiting to be collected: none.");
     expect(text).toContain("S sunflower, W wall_nut, M potato_mine, . empty, Z zombie, a Z in the + column is still walking in");
@@ -36,8 +36,16 @@ describe("summarize", () => {
 
   it("says why each packet can't be used yet", () => {
     const text = summarize(fixture("1-8-midgame"));
-    expect(text).toContain("- peashooter: 100 sun. Needs 50 more sun.");
-    expect(text).toContain("- sunflower: 50 sun. Recharging, 27% done.");
+    expect(text).toContain("- peashooter: 100 sun. Needs 75 more sun.");
+    expect(text).toContain("- sunflower: 50 sun. Recharging, 13% done; then needs 25 more sun.");
+    expect(text).toContain("- potato_mine: 25 sun. Recharging, 99% done.");
+  });
+
+  it("says when a level has no shovel, but only to a player that can dig", () => {
+    const noShovel = "This level has no shovel, so nothing can be dug up.";
+    expect(summarize(fixture("1-1-start"), { shovel: true })).toContain(noShovel);
+    expect(summarize(fixture("1-1-start"))).not.toContain("shovel");
+    expect(summarize(fixture("1-8-start"), { shovel: true })).not.toContain("shovel");
   });
 
   it("leads with the result once the level is won", () => {

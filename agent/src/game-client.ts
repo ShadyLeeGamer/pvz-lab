@@ -54,6 +54,7 @@ const Board = z.object({
   result: z.enum(["playing", "won", "lost"]),
   sun: z.number().int(),
   sunSpendable: z.number().int(),
+  shovel: z.boolean(),
   seedPackets: z.array(SeedPacket),
   lawn: z.object({
     rows: z.array(z.enum(["grass", "dirt", "water", "high_ground"])),
@@ -117,6 +118,7 @@ export function parseReply(status: number, json: unknown): Result {
 
 export type Action =
   | { type: "placePlant"; slot: number; col: number; row: number }
+  | { type: "digUp"; col: number; row: number; plant?: string }
   | { type: "collectSun"; id?: number }
   | { type: "collectAward" };
 

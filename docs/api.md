@@ -75,6 +75,7 @@ Errors: `400 bad_view` for any other `view`; `503 not_ready` before the first ti
 | `result` | string | `playing`, `won`, `lost`. |
 | `sun` | number | The number shown on screen. |
 | `sunSpendable` | number | Includes sun that was clicked and is still flying to the counter; the game lets you spend it. |
+| `shovel` | boolean | The shovel is on screen, so plants can be dug up. The game leaves it out of some levels, such as 1-1 to 1-4 the first time through Adventure. |
 | `seedPackets` | array | See below. |
 | `lawn` | object | See below. |
 | `plants`, `zombies`, `suns` | arrays | See below. |
@@ -164,6 +165,7 @@ One action per request, as `{ "type": ..., ...fields }`.
 | Action | Fields | What it does |
 |---|---|---|
 | `placePlant` | `slot`, `col`, `row` | Picks up the seed packet in `slot` and plants it on the tile: the two clicks a player makes. |
+| `digUp` | `col`, `row`, `plant` (optional) | Picks up the shovel and clicks a plant on the tile: the two clicks a player makes. No sun comes back. Without `plant`, it digs up what a click on the middle of the tile does: the plant itself, before a pumpkin around it or a lily pad or flower pot under it. `plant` names another plant on the tile, such as `"pumpkin"`. |
 | `collectSun` | `id` (optional) | Clicks the sun with that `id`, or every sun on screen when there's no `id`. |
 | `collectAward` | none | Clicks the level-end award, which finishes the level. |
 
@@ -175,13 +177,19 @@ Replies (`200`):
 { "ok": true, "appTicks": 9120 }
 ```
 
-A collected sun counts in `sunSpendable` straight away and reaches `sun` when it lands, about a second of game time later.
+`digUp` answers like `placePlant`, with the plant it dug up in `plant`. A collected sun counts in `sunSpendable` straight away and reaches `sun` when it lands, about a second of game time later.
 
 `placePlant` checks the tile with the game's own placement rules before anything is clicked, so a refused plant changes nothing. The refusal says why:
 
 ```json
 { "error": { "code": "cant_plant_here", "reason": "not_here",
   "message": "sunflower can't go at column 2, row 0: there's already a sunflower there" } }
+```
+
+`digUp` checks first too. The game only lets a lily pad or flower pot be dug up once nothing sits on it, and never a grave buster:
+
+```json
+{ "error": { "code": "cant_dig_up", "message": "the puff_shroom on that flower_pot has to be dug up first" } }
 ```
 
 ## POST /control
@@ -229,6 +237,8 @@ Every control command takes over the clock, so one still running (a step, or a l
 | 409 | `no_such_slot`, `no_such_sun`, `no_award` | Nothing there to use. |
 | 409 | `not_ready` | The seed packet can't be picked up; `reason` is `recharging`, `not_enough_sun` or `no_base_plant`. The message gives the numbers, e.g. `it costs 175 sun and you have 125` or `it's still recharging (80% done)`. |
 | 409 | `cant_plant_here` | The game's placement rules say no; `reason` is the game's own reason (`PlantingReason`). The message is the hint the game shows a player for that rule, in the game's own words, or, where the game shows none, what's on the tile (another plant, dirt, ice or a vase). |
+| 409 | `no_shovel` | The level has no shovel (see `shovel` in `/state`). |
+| 409 | `cant_dig_up` | There's nothing to dig up on the tile, the plant named isn't there, or the game won't let it be dug up yet; the message says which. |
 | 409 | `no_profile`, `needs_input`, `bad_seeds` | A level can't be started (see `startLevel`). |
 | 409 | `interrupted` | A newer control command replaced this one. |
 | 500 | `internal` | Something unexpected; the message says what. |
