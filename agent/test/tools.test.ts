@@ -6,6 +6,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import type { Action, Control, Game, GameState, Result } from "../src/game-client.ts";
+import type { GameStarter } from "../src/mcp/own-game.ts";
 import { normalizePlantName, registerTools } from "../src/mcp/tools.ts";
 import type { ToolName } from "../src/session.ts";
 import { fixture, reply } from "./fixtures/fixture.ts";
@@ -19,6 +20,11 @@ class StandInGame implements Game {
     placePlant: reply("placed"),
     collectSun: reply("suns-collected"),
     collectAward: reply("award-collected"),
+  };
+  readonly controlReplies: Partial<Record<Control["type"], Result>> = {
+    step: reply("stepped"),
+    run: reply("ran"),
+    startLevel: reply("level-started"),
   };
   private readonly states: GameState[];
 
@@ -37,15 +43,32 @@ class StandInGame implements Game {
 
   async control(command: Control): Promise<Result> {
     this.controls.push(command);
-    return reply("stepped");
+    const answer = this.controlReplies[command.type];
+    if (!answer) throw new Error(`the stand-in has no recorded reply to ${command.type}`);
+    return answer;
+  }
+}
+
+// Stands in for the server's own game in a chat app: it only records that it was started.
+class StandInStarter implements GameStarter {
+  started = false;
+
+  async start(): Promise<void> {
+    this.started = true;
   }
 }
 
 const ALL_TOOLS: ToolName[] = ["get_state", "place_plant", "collect_sun", "wait"];
 
-async function connect(game: Game, tools = ALL_TOOLS, time: { clock: "waits" | "realtime"; speed: number } = { clock: "waits", speed: 1 }): Promise<Client> {
+interface Options {
+  clock?: "waits" | "realtime";
+  speed?: number;
+  starter?: GameStarter;
+}
+
+async function connect(game: Game, tools = ALL_TOOLS, options: Options = {}): Promise<Client> {
   const server = new McpServer({ name: "pvz", version: "test" });
-  registerTools(server, tools, { game, ...time });
+  registerTools(server, tools, { game, clock: options.clock ?? "waits", speed: options.speed ?? 1, starter: options.starter });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const client = new Client({ name: "test", version: "test" });
@@ -180,6 +203,66 @@ describe("MCP tools", () => {
     expect(isError).toBe(true);
     expect(text).toBe("You won the level! The level is over, so you can stop playing.");
     expect(game.actions).toEqual([]);
+  });
+});
+
+describe("start_level, for chat apps", () => {
+  const CHAT_TOOLS: ToolName[] = ["start_level", ...ALL_TOOLS];
+  const NO_GAME_YET = "No level is being played yet. Start one with start_level.";
+
+  it("starts the game and the level asked for, paused, and shows it", async () => {
+    const game = new StandInGame(fixture("1-1-start"));
+    const starter = new StandInStarter();
+    const { text, isError } = await call(await connect(game, CHAT_TOOLS, { starter }), "start_level", { level: "1-1" });
+    expect(starter.started).toBe(true);
+    expect(game.controls).toEqual([{ type: "startLevel", level: "1-1", then: "freeze" }]);
+    expect(isError).toBe(false);
+    expect(text.split("\n")[0]).toBe("Level 1-1 started. The game is paused while you think.");
+    expect(text).toContain("Level 1-1 (day)");
+  });
+
+  it("in real time, also starts the clock at the session's speed", async () => {
+    const game = new StandInGame(fixture("1-1-start"));
+    const { text } = await call(await connect(game, CHAT_TOOLS, { clock: "realtime", speed: 3 }), "start_level", { level: "1-1" });
+    expect(game.controls).toEqual([{ type: "startLevel", level: "1-1", then: "freeze" }, { type: "run", speed: 3 }]);
+    expect(text.split("\n")[0]).toBe("Level 1-1 started. The game is running.");
+  });
+
+  it("shows what a level offers to bring, and what each costs, as the seed chooser does", async () => {
+    const game = new StandInGame(fixture("1-1-start"));
+    game.controlReplies.startLevel = reply("seeds-asked");
+    const { text, isError } = await call(await connect(game, CHAT_TOOLS), "start_level", { level: "1-8" });
+    expect(isError).toBe(false);
+    expect(text).toBe(
+      "Level 1-8 asks you to choose 6 seed packets first.\n" +
+        "You can choose from: peashooter (100 sun), sunflower (50 sun), cherry_bomb (150 sun), wall_nut (50 sun), " +
+        "potato_mine (25 sun), snow_pea (175 sun), chomper (150 sun).\n" +
+        "Call start_level again with the 6 you pick.",
+    );
+  });
+
+  it("passes the seeds on in the game's names", async () => {
+    const game = new StandInGame(fixture("1-8-start"));
+    await call(await connect(game, CHAT_TOOLS), "start_level", { level: "1-8", seeds: ["Wall-nut", "Snow Pea"] });
+    expect(game.controls).toEqual([{ type: "startLevel", level: "1-8", seeds: ["wall_nut", "snow_pea"], then: "freeze" }]);
+  });
+
+  it("says when a level isn't supported yet", async () => {
+    const game = new StandInGame(fixture("1-1-start"));
+    game.controlReplies.startLevel = reply("crazy-dave");
+    const { text, isError } = await call(await connect(game, CHAT_TOOLS), "start_level", { level: "2-1" });
+    expect(isError).toBe(true);
+    expect(text).toBe("Level 2-1 isn't supported yet: it opens with Crazy Dave talking.");
+  });
+
+  it("before the first level, the other tools say to start one, and nothing reaches the game", async () => {
+    const game = new StandInGame(fixture("1-1-start"));
+    const client = await connect(game, CHAT_TOOLS, { starter: new StandInStarter() });
+    expect(await call(client, "get_state")).toEqual({ text: NO_GAME_YET, isError: false });
+    expect(await call(client, "place_plant", { plant: "peashooter", col: 0, row: 2 })).toEqual({ text: NO_GAME_YET, isError: true });
+    expect(await call(client, "wait", { seconds: 1 })).toEqual({ text: NO_GAME_YET, isError: true });
+    expect(game.actions).toEqual([]);
+    expect(game.controls).toEqual([]);
   });
 });
 

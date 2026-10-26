@@ -199,10 +199,11 @@ Controls game time and starts levels, as `{ "type": ..., ...fields }`.
 
 **`startLevel`:**
 - `level`: `1`–`50`, or a name from `"1-1"` to `"5-10"`. Without it, the profile's current Adventure level, which is the next one after a win.
-- `seeds`: the plants to pick, by name, for levels that make you choose. If they're missing or wrong, the reply lists what can be picked:
+- `seeds`: the plants to pick, by name, for levels that make you choose. If they're missing or wrong, the reply lists what can be picked, with each one's sun cost (`costs`), as the seed chooser shows it:
   ```json
   { "error": { "code": "bad_seeds", "message": "this level makes you choose 6 seeds; \"seeds\" has 0",
-    "choices": ["peashooter", "sunflower", "cherry_bomb", "wall_nut", "potato_mine", "snow_pea", "chomper"], "pick": 6 } }
+    "choices": ["peashooter", "sunflower", "cherry_bomb", "wall_nut", "potato_mine", "snow_pea", "chomper"],
+    "costs": [100, 50, 150, 50, 25, 175, 150], "pick": 6 } }
   ```
 - `then`: `"freeze"` (default) or `"run"` once play has started.
 - It waits for the game to finish loading, closes a "game over" or "continue?" dialog, and leaves the title screen, menus or award screen the way the game's own buttons do.

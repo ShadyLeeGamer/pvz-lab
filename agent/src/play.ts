@@ -68,6 +68,10 @@ if (!sessionFile) {
 
 const session = await loadSession(sessionFile);
 const { level, seeds, clock, speed, maxTurns, tools } = session.settings;
+if (level === undefined) {
+  console.error(`${sessionFile} lets the player pick levels with start_level, which is for chat apps (see the README). pnpm play needs a session with a "level".`);
+  process.exit(1);
+}
 const claude = findClaude();
 const gameConfig = readGameConfig();
 

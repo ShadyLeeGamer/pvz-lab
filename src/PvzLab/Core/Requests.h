@@ -91,6 +91,7 @@ namespace PvzLab
 		std::string						mMessage;
 		std::string						mReason;				// the game's own reason, e.g. "recharging", "only_in_pool"
 		std::vector<std::string>		mChoices;				// bad_seeds: the seeds that can be picked
+		std::vector<int>				mChoiceCosts;			// bad_seeds: their sun costs, as the seed chooser shows them
 		int								mPick = 0;				// bad_seeds: how many to pick
 	};
 

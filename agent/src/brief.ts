@@ -7,6 +7,9 @@ export function sessionRules({ clock, speed, tools }: Session): string[] {
   const has = (tool: ToolName) => tools.includes(tool);
   const rules: string[] = [];
 
+  if (has("start_level")) {
+    rules.push("Start a level with start_level. From 1-8 on, a level first asks which seed packets to bring: start_level shows the choices and what each costs.");
+  }
   if (clock === "waits") {
     rules.push("The game is paused while you think. Game time only passes when you call wait, and you choose how long each wait is.");
   } else {
@@ -29,5 +32,6 @@ export function sessionRules({ clock, speed, tools }: Session): string[] {
 
 export function writeBrief(template: string, settings: Session): string {
   const rules = sessionRules(settings).map((rule) => `- ${rule}`).join("\n");
-  return template.replaceAll("{level}", String(settings.level)).replaceAll("{rules}", rules);
+  const withLevel = settings.level === undefined ? template : template.replaceAll("{level}", String(settings.level));
+  return withLevel.replaceAll("{rules}", rules);
 }

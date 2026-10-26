@@ -4,13 +4,14 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
 
-export const TOOL_NAMES = ["get_state", "place_plant", "collect_sun", "wait"] as const;
+export const TOOL_NAMES = ["start_level", "get_state", "place_plant", "collect_sun", "wait"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 export const MAX_SPEED = 50; // the game's fastest speed (kMaxSpeed in Clock.h)
 
 export const Session = z.object({
-  // Adventure level, as a number (1-50) or a name ("1-1").
-  level: z.union([z.number().int().min(1).max(50), z.string().regex(/^[1-5]-([1-9]|10)$/)]),
+  // Adventure level, as a number (1-50) or a name ("1-1"). A session for chat apps leaves it out (and
+  // seeds too) and offers start_level instead, so the player starts the levels.
+  level: z.union([z.number().int().min(1).max(50), z.string().regex(/^[1-5]-([1-9]|10)$/)]).optional(),
   // The seed packets to bring, by name, for levels that make you choose (1-8 onwards).
   seeds: z.array(z.string().min(1)).min(1).optional(),
   // "waits": the game is paused while Claude thinks, and time only passes when it waits.
@@ -28,10 +29,19 @@ export const Session = z.object({
   brief: z.string().min(1),
   // A cap on Claude's turns, so a confused run can't go on forever.
   maxTurns: z.number().int().positive().default(400),
-}).refine((session) => session.clock !== "waits" || session.tools.includes("wait"), {
-  message: 'with "clock": "waits", game time only passes when the player calls wait, so "tools" must include "wait"',
-  path: ["tools"],
-});
+})
+  .refine((session) => session.clock !== "waits" || session.tools.includes("wait"), {
+    message: 'with "clock": "waits", game time only passes when the player calls wait, so "tools" must include "wait"',
+    path: ["tools"],
+  })
+  .refine((session) => !session.tools.includes("start_level") || (session.level === undefined && session.seeds === undefined), {
+    message: 'with "start_level" the player picks the level and seeds, so leave out "level" and "seeds"',
+    path: ["level"],
+  })
+  .refine((session) => session.tools.includes("start_level") || session.level !== undefined, {
+    message: 'set "level", or offer "start_level" so the player can pick one',
+    path: ["level"],
+  });
 export type Session = z.infer<typeof Session>;
 
 export interface LoadedSession {

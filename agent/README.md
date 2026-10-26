@@ -55,6 +55,31 @@ Each run is saved in `runs/` (not committed): the session, the brief, every tool
 
 The tools answer with a short text summary of the player view: a map of the lawn, then lists of seed packets, zombies and sun. Nothing hidden from a player, such as exact health or wave timers, is included.
 
+## Playing in a chat app
+
+The MCP server also works in apps that run MCP servers on your computer, such as Claude Desktop, Claude Code's own chat, VS Code or Cursor. Give it a session that offers `start_level` instead of setting a `level` (such as `sessions/chat.json`), and no `PVZ_API_URL`:
+- The server starts its own copy of the game at the first `start_level`, and closes it when the app closes the server.
+- `start_level` takes a level such as `2-7`. From 1-8 on, the game first asks for seeds: called without them, `start_level` lists the choices and what each costs.
+- The session's clock, speed and tools apply. Its instructions reach the app as the server's instructions, and there's a `play_level` prompt.
+- Unlike `pnpm play`, the app isn't locked down: your other tools, memory and settings come along.
+- `node` on your PATH must be Node 24 or later.
+
+Claude Desktop: Settings → Developer → Edit Config, with your own paths:
+```json
+{ "mcpServers": { "pvz": {
+  "command": "node",
+  "args": ["C:/path/to/pvz-lab/agent/src/mcp/server.ts"],
+  "env": { "PVZ_SESSION": "C:/path/to/pvz-lab/agent/sessions/chat.json" }
+} } }
+```
+
+Claude Code, for all your projects (leave out `-s user` for just the current one):
+```
+claude mcp add pvz -s user -e PVZ_SESSION=C:/path/to/pvz-lab/agent/sessions/chat.json -- node C:/path/to/pvz-lab/agent/src/mcp/server.ts
+```
+
+Then ask, say, "play level 2-7". The game window opens at the first level. If the app is force-closed, the game still closes, but its temporary save folder stays in your temp folder.
+
 ## Tests
 
 - Unit tests check:
@@ -65,4 +90,5 @@ The tools answer with a short text summary of the player view: a map of the lawn
   - They start 1-1 from the title screen, plant, collect sun, and win it at high speed.
   - Then they move on to 1-2, start each level up to 1-7, and pick seeds on 1-8.
   - Another drives the MCP server against the game, the way Claude Code does.
+  - Another runs the server the way a chat app does: it starts its own game at `start_level`, asks for seeds with their costs, and closes the game when the app closes the server.
   - A full run takes about 20 seconds.

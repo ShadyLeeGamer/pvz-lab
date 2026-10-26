@@ -247,6 +247,7 @@ namespace PvzLab
 			if (aProblem.mCode == ProblemCode::BadSeeds)
 			{
 				anError["choices"] = aProblem.mChoices;
+				anError["costs"] = aProblem.mChoiceCosts;
 				anError["pick"] = aProblem.mPick;
 			}
 			aJson["error"] = anError;

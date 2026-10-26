@@ -3,7 +3,17 @@ import { readFileSync } from "node:fs";
 import { GameState, parseReply, type Result } from "../../src/game-client.ts";
 
 export type FixtureName = "1-1-start" | "1-1-zombie" | "1-1-won" | "award-screen" | "1-2-start" | "1-8-start" | "1-8-midgame";
-export type ReplyName = "placed" | "cant-plant-here" | "game-hint" | "suns-collected" | "award-collected" | "stepped";
+export type ReplyName =
+  | "level-started"
+  | "seeds-asked"
+  | "crazy-dave"
+  | "placed"
+  | "cant-plant-here"
+  | "game-hint"
+  | "suns-collected"
+  | "award-collected"
+  | "stepped"
+  | "ran";
 
 export interface SavedReply {
   status: number;

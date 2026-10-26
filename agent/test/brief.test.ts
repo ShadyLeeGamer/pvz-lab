@@ -28,6 +28,13 @@ Play the level to the end on your own. When a tool says the level is over, stop.
 `);
   });
 
+  it("tells a chat app's player how to start levels, with no level of its own", () => {
+    const chat = readFileSync(new URL("../prompts/chat.md", import.meta.url), "utf8");
+    const text = writeBrief(chat, session({ level: undefined, tools: ["start_level", "get_state", "place_plant", "collect_sun", "wait"] }));
+    expect(text).toContain("- Start a level with start_level. From 1-8 on, a level first asks which seed packets to bring");
+    expect(text).not.toMatch(/\{\w+\}/);
+  });
+
   it("in real time without wait, says the game keeps running and never mentions wait", () => {
     const text = writeBrief(template, session({ level: "1-7", clock: "realtime", tools: ["get_state", "place_plant", "collect_sun"] }));
     expect(text).toContain("Adventure level 1-7");

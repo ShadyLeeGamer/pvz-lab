@@ -106,11 +106,13 @@ TEST_CASE("a refused request uses the error shape, with the game's reason")
 
 	Problem aSeeds = MakeProblem(ProblemCode::BadSeeds);
 	aSeeds.mChoices = { "peashooter", "sunflower" };
+	aSeeds.mChoiceCosts = { 100, 50 };
 	aSeeds.mPick = 1;
 	Reply aSeedsReply;
 	aSeedsReply.mProblem = aSeeds;
 	json aSeedsJson = json::parse(ReplyToJson(aSeedsReply));
-	CHECK(aSeedsJson.at("error").at("choices").size() == 2);
+	CHECK(aSeedsJson.at("error").at("choices") == json::array({ "peashooter", "sunflower" }));
+	CHECK(aSeedsJson.at("error").at("costs") == json::array({ 100, 50 }));
 	CHECK(aSeedsJson.at("error").at("pick") == 1);
 }
 

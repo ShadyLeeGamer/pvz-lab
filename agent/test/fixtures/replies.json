@@ -1,4 +1,17 @@
 {
+  "level-started": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 1071,
+      "level": 1,
+      "levelName": "1-1",
+      "clock": {
+        "state": "frozen",
+        "speed": 1
+      }
+    }
+  },
   "cant-plant-here": {
     "status": 409,
     "body": {
@@ -13,7 +26,7 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 987,
+      "appTicks": 1071,
       "plant": {
         "id": 65601536,
         "type": "peashooter",
@@ -26,7 +39,7 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 1087,
+      "appTicks": 1171,
       "clock": {
         "state": "frozen",
         "speed": 50
@@ -37,14 +50,53 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 6687
+      "appTicks": 5871
+    }
+  },
+  "ran": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 7327,
+      "clock": {
+        "state": "running",
+        "speed": 1
+      }
+    }
+  },
+  "seeds-asked": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "bad_seeds",
+        "message": "this level makes you choose 6 seeds; \"seeds\" has 0",
+        "choices": [
+          "peashooter",
+          "sunflower",
+          "cherry_bomb",
+          "wall_nut",
+          "potato_mine",
+          "snow_pea",
+          "chomper"
+        ],
+        "costs": [
+          100,
+          50,
+          150,
+          50,
+          25,
+          175,
+          150
+        ],
+        "pick": 6
+      }
     }
   },
   "suns-collected": {
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 14855,
+      "appTicks": 13640,
       "collected": 2,
       "value": 50
     }
@@ -56,6 +108,15 @@
         "code": "cant_plant_here",
         "message": "puff_shroom can't go at column 4, row 4: You can't plant on graves",
         "reason": "not_on_grave"
+      }
+    }
+  },
+  "crazy-dave": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "needs_input",
+        "message": "Crazy Dave is talking; levels that start with him aren't supported yet"
       }
     }
   }

@@ -1,7 +1,8 @@
 // Saves real game states for the unit tests: launches the game, plays a little through the API,
 // and writes /state (the player view) at interesting moments into this folder. The game's replies
 // to a few requests go into replies.json, so the tests never need to make one up.
-// Run with `pnpm fixtures:capture` (needs agent/.env, like the end-to-end tests).
+// Run with `pnpm fixtures:capture` (needs agent/.env, like the end-to-end tests). With --replies-only it
+// refreshes replies.json and leaves the saved states, and the tests written against them, alone.
 import { writeFile } from "node:fs/promises";
 import { launchGame, readGameConfig } from "../../src/game-process.ts";
 
@@ -12,6 +13,7 @@ interface Answer {
   body: Json;
 }
 
+const repliesOnly = process.argv.includes("--replies-only");
 const game = await launchGame(readGameConfig());
 const replies: Record<string, Answer> = {};
 
@@ -40,6 +42,7 @@ async function state(): Promise<Json> {
 }
 
 async function save(name: string, content: Json): Promise<void> {
+  if (repliesOnly && name !== "replies") return;
   await writeFile(new URL(`./${name}.json`, import.meta.url), `${JSON.stringify(content, null, 2)}\n`);
   console.log(`saved ${name}.json`);
 }
@@ -68,7 +71,7 @@ async function playUntil(done: (snapshot: Json) => boolean): Promise<Json> {
 }
 
 try {
-  await post("/control", { type: "startLevel", level: "1-1" });
+  keep("level-started", await post("/control", { type: "startLevel", level: "1-1" }));
   await save("1-1-start", await state());
 
   // 1-1 only has sod in row 2, so the game refuses a plant in row 0.
@@ -85,8 +88,12 @@ try {
 
   await post("/control", { type: "startLevel" });
   await save("1-2-start", await state());
+  keep("ran", await post("/control", { type: "run", speed: 1 }));
+  await post("/control", { type: "freeze" });
 
-  const { choices, pick } = (await send("/control", { type: "startLevel", level: "1-8" })).body.error;
+  const asked = await send("/control", { type: "startLevel", level: "1-8" });
+  keep("seeds-asked", asked);
+  const { choices, pick } = asked.body.error;
   await post("/control", { type: "startLevel", level: "1-8", seeds: choices.slice(0, pick) });
   await save("1-8-start", await state());
   await save("1-8-midgame", await playUntil((s) => s.board.zombies.length >= 2 && s.board.plants.length >= 6));
@@ -107,6 +114,11 @@ try {
   const hinted = await send("/actions", { type: "placePlant", slot: puff.slot, col: grave.col, row: grave.row });
   if (hinted.status !== 409) throw new Error(`expected the game to refuse a mushroom on a grave, got ${hinted.status} ${JSON.stringify(hinted.body)}`);
   keep("game-hint", hinted);
+
+  // A level the API can't start yet: it opens with Crazy Dave talking.
+  const dave = await send("/control", { type: "startLevel", level: "2-1" });
+  if (dave.status !== 409) throw new Error(`expected 2-1 to be refused, got ${dave.status} ${JSON.stringify(dave.body)}`);
+  keep("crazy-dave", dave);
 
   await save("replies", replies);
 } finally {

@@ -1,0 +1,5 @@
+{
+  "clock": "waits",
+  "tools": ["start_level", "get_state", "place_plant", "collect_sun", "wait"],
+  "brief": "../../prompts/chat.md"
+}

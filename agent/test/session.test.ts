@@ -46,6 +46,16 @@ describe("loadSession", () => {
     }
   });
 
+  it("for a chat app, offers start_level instead of a level, and never both", async () => {
+    const chat = await loadSession(fileURLToPath(new URL("../sessions/chat.json", import.meta.url)));
+    expect(chat.settings.level).toBeUndefined();
+    expect(chat.settings.tools).toContain("start_level");
+    await expect(loadSession(await write({ level: "1-1", tools: ["start_level", "wait"], brief: "b.md" }))).rejects.toThrow(
+      /leave out "level" and "seeds"/,
+    );
+    await expect(loadSession(await write({ tools: ["get_state", "wait"], brief: "b.md" }))).rejects.toThrow(/offer "start_level"/);
+  });
+
   it("refuses a paused clock without wait, since game time would never move", async () => {
     await expect(loadSession(await write({ level: "1-1", clock: "waits", tools: ["get_state", "place_plant"], brief: "b.md" }))).rejects.toThrow(
       /must include "wait"/,

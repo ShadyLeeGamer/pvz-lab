@@ -871,6 +871,7 @@ namespace PvzLab
 
 		// What a player could click: seeds the profile has that are still in the chooser.
 		std::vector<std::string> aChoices;
+		std::vector<int> aCosts;
 		std::vector<SeedType> aChoiceTypes;
 		for (int aType = 0; aType < SeedType::NUM_SEEDS_IN_CHOOSER; aType++)
 		{
@@ -880,6 +881,7 @@ namespace PvzLab
 				aChooser->mChosenSeeds[aSeed].mSeedState != ChosenSeedState::SEED_IN_CHOOSER)
 				continue;
 			aChoices.push_back(PlantName(aSeed));
+			aCosts.push_back(Plant::GetCost(aSeed));
 			aChoiceTypes.push_back(aSeed);
 		}
 		// On replays Crazy Dave has already filled some slots.
@@ -903,6 +905,7 @@ namespace PvzLab
 		{
 			Problem aProblem = MakeProblem(ProblemCode::BadSeeds, aMismatch);
 			aProblem.mChoices = aChoices;
+			aProblem.mChoiceCosts = aCosts;
 			aProblem.mPick = aPick;
 			return aProblem;
 		}

@@ -91,6 +91,7 @@ const ApiError = z.object({
   message: z.string(),
   reason: z.string().optional(),
   choices: z.array(z.string()).optional(),
+  costs: z.array(z.number().int()).optional(),
   pick: z.number().int().optional(),
 });
 export type ApiError = z.infer<typeof ApiError>;

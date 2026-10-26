@@ -14,6 +14,7 @@ export interface GameConfig {
 
 export interface RunningGame {
   baseUrl: string;
+  exited(): boolean; // closed by itself or by someone, rather than by stop()
   stop(): Promise<void>;
 }
 
@@ -111,5 +112,5 @@ export async function launchGame(config: GameConfig): Promise<RunningGame> {
     await stop();
     throw error;
   }
-  return { baseUrl, stop };
+  return { baseUrl, exited: () => game.exitCode !== null || game.signalCode !== null, stop };
 }

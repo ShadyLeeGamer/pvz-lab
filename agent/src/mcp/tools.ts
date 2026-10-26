@@ -3,16 +3,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import type { Game, GameState } from "../game-client.ts";
+import type { ApiError, Game, GameState } from "../game-client.ts";
 import type { ToolName } from "../session.ts";
 import { summarize } from "../summarize.ts";
+import type { GameStarter } from "./own-game.ts";
 
 export interface ToolContext {
   game: Game;
+  starter?: GameStarter; // in a chat app the server starts its own game, when start_level is first called
   clock: "waits" | "realtime";
   speed: number; // how fast game time runs whenever it runs; 1 is normal speed
   log?: (entry: Record<string, unknown>) => void;
 }
+
+const NO_GAME_YET = "No level is being played yet. Start one with start_level.";
 
 export const MAX_WAIT_SECONDS = 30;
 const TICKS_PER_SECOND = 100;
@@ -60,6 +64,13 @@ async function look(context: ToolContext): Promise<{ state: GameState; levelName
   return { state: await finishWonLevel(context, first), levelName: first.board?.levelName };
 }
 
+// What start_level says when a level asks which seed packets to bring, like the seed chooser screen.
+function seedChoice(level: string, error: ApiError, triedSeeds: boolean): string {
+  const choices = (error.choices ?? []).map((plant, i) => (error.costs?.[i] === undefined ? plant : `${plant} (${error.costs[i]} sun)`));
+  const why = triedSeeds ? `Level ${level} didn't start: ${error.message}.` : `Level ${level} asks you to choose ${error.pick} seed packets first.`;
+  return `${why}\nYou can choose from: ${choices.join(", ")}.\nCall start_level again with the ${error.pick} you pick.`;
+}
+
 // Runs a tool, logs the call, and turns anything unexpected into an error Claude can read.
 async function logged(context: ToolContext, tool: ToolName, input: unknown, handler: () => Promise<CallToolResult>): Promise<CallToolResult> {
   let result: CallToolResult;
@@ -84,6 +95,42 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
     const now = await look(context);
     return levelIsOver(now.state) ? endOfLevel(now.state, now.levelName ?? levelName) : summarize(now.state);
   };
+  // In a chat app nothing runs until the first start_level.
+  const noGameYet = (): boolean => context.starter !== undefined && !context.starter.started;
+
+  if (enabled.has("start_level")) {
+    server.registerTool(
+      "start_level",
+      {
+        title: "Start a level",
+        description:
+          "Starts an Adventure level, such as 1-1 or 2-7, and shows the game. From 1-8 on, the game first asks which seed packets " +
+          "to bring: call it without seeds to see the choices and their costs, then again with the ones you pick. " +
+          "Starting a level ends any level being played.",
+        inputSchema: {
+          level: z.string().regex(/^[1-5]-([1-9]|10)$/).describe("The level, from 1-1 to 5-10."),
+          seeds: z.array(z.string().min(1)).optional().describe("The seed packets to bring, by name, when the level asks you to choose."),
+        },
+      },
+      (input) =>
+        logged(context, "start_level", input, async () => {
+          await context.starter?.start();
+          const seeds = input.seeds?.map(normalizePlantName);
+          const result = await game.control({ type: "startLevel", level: input.level, seeds, then: "freeze" });
+          if (!result.ok) {
+            if (result.error.code === "bad_seeds" && result.error.choices) return reply(seedChoice(input.level, result.error, seeds !== undefined), seeds !== undefined);
+            if (result.error.code === "needs_input") return reply(`Level ${input.level} isn't supported yet: it opens with Crazy Dave talking.`, true);
+            return reply(`Level ${input.level} didn't start: ${result.error.message}.`, true);
+          }
+          if (context.clock === "realtime") {
+            const running = await game.control({ type: "run", speed: context.speed });
+            if (!running.ok) return reply(`Level ${input.level} started, but time didn't start: ${running.error.message}.`, true);
+          }
+          const how = context.clock === "waits" ? "The game is paused while you think." : "The game is running.";
+          return reply(`Level ${input.level} started. ${how}\n\n${summarize(await game.state())}`);
+        }),
+    );
+  }
 
   if (enabled.has("get_state")) {
     server.registerTool(
@@ -94,7 +141,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
         // In real time it can be the tool that sees a win, and then it collects the award.
         annotations: { readOnlyHint: context.clock === "waits" },
       },
-      () => logged(context, "get_state", {}, async () => reply(await show())),
+      () => logged(context, "get_state", {}, async () => reply(noGameYet() ? NO_GAME_YET : await show())),
     );
   }
 
@@ -115,6 +162,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
       },
       (input) =>
         logged(context, "place_plant", input, async () => {
+          if (noGameYet()) return reply(NO_GAME_YET, true);
           const { state, levelName } = await look(context);
           if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
           const packets = state.board!.seedPackets;
@@ -138,6 +186,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
       },
       () =>
         logged(context, "collect_sun", {}, async () => {
+          if (noGameYet()) return reply(NO_GAME_YET, true);
           const { state, levelName } = await look(context);
           if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
           const result = await game.act({ type: "collectSun" });
@@ -164,6 +213,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
       },
       (input) =>
         logged(context, "wait", input, async () => {
+          if (noGameYet()) return reply(NO_GAME_YET, true);
           const { state: before, levelName } = await look(context);
           if (levelIsOver(before)) return reply(endOfLevel(before, levelName), true);
           if (context.clock === "waits") {
