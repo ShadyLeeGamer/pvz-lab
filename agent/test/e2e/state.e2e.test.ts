@@ -1,8 +1,6 @@
 // Checks the local API against the real game, sitting at the title screen.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { launchGame, readGameConfig, type RunningGame } from "./game.ts";
-
-const config = readGameConfig();
+import { launchGame, readGameConfig, type RunningGame } from "../../src/game-process.ts";
 
 async function getJson(url: string): Promise<{ status: number; body: any }> {
   const response = await fetch(url);
@@ -10,11 +8,11 @@ async function getJson(url: string): Promise<{ status: number; body: any }> {
   return { status: response.status, body: await response.json() };
 }
 
-describe.skipIf(!config)("local API (launches the game; needs agent/.env)", () => {
+describe("local API (launches the game; needs agent/.env)", () => {
   let game: RunningGame | undefined;
 
   beforeAll(async () => {
-    game = await launchGame(config!);
+    game = await launchGame(readGameConfig());
   });
 
   afterAll(async () => {
@@ -27,6 +25,8 @@ describe.skipIf(!config)("local API (launches the game; needs agent/.env)", () =
     expect(body.apiVersion).toBe(1);
     expect(body.ok).toBe(true);
     expect(body.build.commit).toMatch(/^[0-9a-f]{7,}/);
+    // The launcher waits for this, because a game still loading can be too busy to pick requests up.
+    expect(body.loaded).toBe(true);
   });
 
   it("returns the player view by default, with no board outside a level", async () => {

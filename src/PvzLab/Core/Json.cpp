@@ -222,6 +222,7 @@ namespace PvzLab
 		aJson["build"] = Json{ { "commit", theReport.mCommit }, { "builtAt", theReport.mBuiltAt }, { "gameVersion", theReport.mGameVersion } };
 		aJson["scene"] = theReport.mScene.empty() ? Json(nullptr) : Json(theReport.mScene);
 		aJson["appTicks"] = theReport.mAppTicks;
+		aJson["loaded"] = theReport.mLoaded;
 		return aJson.dump();
 	}
 

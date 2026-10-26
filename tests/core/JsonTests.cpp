@@ -95,12 +95,13 @@ TEST_CASE("a successful reply says ok, with what happened")
 TEST_CASE("a refused request uses the error shape, with the game's reason")
 {
 	Reply aReply;
-	aReply.mProblem = CantPlantHere(PlacementReason::NotOnWater);
+	aReply.mProblem = CantPlantHere(PlacementReason::NotOnWater, "peashooter can't go at column 2, row 2: it needs a lily pad");
 	json aJson = json::parse(ReplyToJson(aReply));
 	CHECK(ReplyStatus(aReply) == 409);
 	CHECK_FALSE(aJson.contains("ok"));
 	CHECK(aJson.at("error").at("code") == "cant_plant_here");
 	CHECK(aJson.at("error").at("reason") == "not_on_water");
+	CHECK(aJson.at("error").at("message") == "peashooter can't go at column 2, row 2: it needs a lily pad");
 	CHECK_FALSE(aJson.at("error").contains("choices"));
 
 	Problem aSeeds = MakeProblem(ProblemCode::BadSeeds);
@@ -122,12 +123,16 @@ TEST_CASE("errors and health reports have a stable shape")
 	HealthReport aReport;
 	aReport.mCommit = "abc1234";
 	aReport.mScene = "menu";
+	aReport.mLoaded = true;
 	json aHealth = json::parse(HealthToJson(aReport));
 	CHECK(aHealth.at("apiVersion") == kApiVersion);
 	CHECK(aHealth.at("ok") == true);
 	CHECK(aHealth.at("build").at("commit") == "abc1234");
 	CHECK(aHealth.at("scene") == "menu");
+	CHECK(aHealth.at("loaded") == true);
 
 	HealthReport aStarting;
-	CHECK(json::parse(HealthToJson(aStarting)).at("scene").is_null());
+	json aStartingHealth = json::parse(HealthToJson(aStarting));
+	CHECK(aStartingHealth.at("scene").is_null());
+	CHECK(aStartingHealth.at("loaded") == false);
 }

@@ -1,4 +1,4 @@
-// Launches the real game for end-to-end tests, with a throwaway copy of a save folder.
+// Launches the real game for end-to-end tests and play sessions, with a throwaway copy of a save folder.
 import { spawn, type ChildProcess } from "node:child_process";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -17,15 +17,24 @@ export interface RunningGame {
   stop(): Promise<void>;
 }
 
-// Paths come from agent/.env (not committed); see .env.example.
-export function readGameConfig(): GameConfig | undefined {
+// Reads agent/.env (not committed; see .env.example) into the environment, once.
+export function loadEnv(): void {
   try {
-    process.loadEnvFile(fileURLToPath(new URL("../../.env", import.meta.url)));
+    process.loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
   } catch {
-    // No .env file: fall back to whatever is already in the environment.
+    // No .env file: use whatever is already in the environment.
   }
+}
+
+// The game's paths. Missing ones are an error, never a reason to skip: a test run that tested
+// nothing must not look like a pass.
+export function readGameConfig(): GameConfig {
+  loadEnv();
   const { PVZ_EXE, PVZ_RESDIR, PVZ_SAVE_TEMPLATE } = process.env;
-  if (!PVZ_EXE || !PVZ_RESDIR || !PVZ_SAVE_TEMPLATE) return undefined;
+  if (!PVZ_EXE || !PVZ_RESDIR || !PVZ_SAVE_TEMPLATE) {
+    const missing = Object.entries({ PVZ_EXE, PVZ_RESDIR, PVZ_SAVE_TEMPLATE }).filter(([, value]) => !value).map(([name]) => name);
+    throw new Error(`agent/.env doesn't set ${missing.join(", ")}; copy .env.example to .env and fill in the paths`);
+  }
   return { exe: PVZ_EXE, resDir: PVZ_RESDIR, saveTemplate: PVZ_SAVE_TEMPLATE };
 }
 
@@ -41,20 +50,22 @@ async function findFreePort(): Promise<number> {
   });
 }
 
-async function waitForHealth(baseUrl: string, startFailure: () => Error | undefined, timeoutMs: number): Promise<void> {
+// The API answers as soon as the game starts, but while the game loads, its loop can stall for over a
+// second, and a request it doesn't pick up within 2 s is withdrawn as "busy". So wait for "loaded".
+async function waitUntilLoaded(baseUrl: string, startFailure: () => Error | undefined, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const failure = startFailure();
     if (failure) throw failure;
     try {
       const response = await fetch(`${baseUrl}/health`);
-      if (response.ok) return;
+      if (response.ok && (await response.json()).loaded === true) return;
     } catch {
       // Not listening yet.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error(`no answer from ${baseUrl}/health within ${timeoutMs} ms`);
+  throw new Error(`the game at ${baseUrl} didn't finish loading within ${timeoutMs} ms`);
 }
 
 export async function launchGame(config: GameConfig): Promise<RunningGame> {
@@ -95,7 +106,7 @@ export async function launchGame(config: GameConfig): Promise<RunningGame> {
   };
 
   try {
-    await waitForHealth(baseUrl, startFailure, 60_000);
+    await waitUntilLoaded(baseUrl, startFailure, 60_000);
   } catch (error) {
     await stop();
     throw error;

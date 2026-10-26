@@ -1,0 +1,143 @@
+{
+  "apiVersion": 1,
+  "view": "player",
+  "appTicks": 2687,
+  "scene": "playing",
+  "mode": "adventure",
+  "modeId": 0,
+  "clock": {
+    "state": "frozen",
+    "speed": 50
+  },
+  "dialogOpen": false,
+  "minimized": false,
+  "board": {
+    "level": 1,
+    "levelName": "1-1",
+    "stage": "day",
+    "paused": false,
+    "gameTicks": 1701,
+    "boardTicks": 2556,
+    "result": "playing",
+    "sun": 0,
+    "sunSpendable": 0,
+    "seedPackets": [
+      {
+        "slot": 0,
+        "plant": "peashooter",
+        "plantId": 0,
+        "cost": 100,
+        "ready": false,
+        "held": false,
+        "recharge": 0.67,
+        "plantableTiles": [
+          {
+            "col": 2,
+            "row": 2
+          },
+          {
+            "col": 3,
+            "row": 2
+          },
+          {
+            "col": 4,
+            "row": 2
+          },
+          {
+            "col": 5,
+            "row": 2
+          },
+          {
+            "col": 6,
+            "row": 2
+          },
+          {
+            "col": 7,
+            "row": 2
+          },
+          {
+            "col": 8,
+            "row": 2
+          }
+        ]
+      }
+    ],
+    "lawn": {
+      "rows": [
+        "dirt",
+        "dirt",
+        "grass",
+        "dirt",
+        "dirt"
+      ],
+      "items": [],
+      "ice": []
+    },
+    "plants": [
+      {
+        "id": 65601536,
+        "type": "peashooter",
+        "typeId": 0,
+        "col": 0,
+        "row": 2,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 65667073,
+        "type": "peashooter",
+        "typeId": 0,
+        "col": 1,
+        "row": 2,
+        "layer": "normal",
+        "asleep": false
+      }
+    ],
+    "zombies": [
+      {
+        "id": 65929220,
+        "type": "zombie",
+        "typeId": 0,
+        "row": 2,
+        "x": 749,
+        "y": 250,
+        "onScreen": true,
+        "eating": false,
+        "slowed": false,
+        "frozen": false,
+        "buttered": false,
+        "hypnotized": false,
+        "inPool": false,
+        "flying": false,
+        "underground": false,
+        "hasArm": true,
+        "hasHead": true,
+        "helm": null,
+        "shield": null
+      }
+    ],
+    "suns": [
+      {
+        "id": 65732608,
+        "value": 25,
+        "x": 182,
+        "y": 86,
+        "beingCollected": false
+      }
+    ],
+    "award": null,
+    "mowers": [
+      {
+        "row": 2,
+        "kind": "lawn_mower",
+        "state": "ready"
+      }
+    ],
+    "progress": {
+      "wave": 1,
+      "totalWaves": 4,
+      "meter": 0.05,
+      "hugeWaveIncoming": false
+    }
+  }
+}

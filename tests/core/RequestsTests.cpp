@@ -169,13 +169,18 @@ TEST_CASE("problems map to HTTP statuses: the request's fault, the game's state,
 
 TEST_CASE("placement and packet problems carry the game's reason")
 {
-	Problem aWater = CantPlantHere(PlacementReason::OnlyInPool);
+	Problem aWater = CantPlantHere(PlacementReason::OnlyInPool, "the game's own words");
 	CHECK(aWater.mCode == ProblemCode::CantPlantHere);
 	CHECK(aWater.mReason == "only_in_pool");
-	CHECK(aWater.mMessage == "it can only go in water");
+	CHECK(aWater.mMessage == "the game's own words");
+	CHECK(CantPlantHere(PlacementReason::NotHere, "x").mReason == "not_here");
+	CHECK(CantPlantHere(PlacementReason::NeedsSleeping, "x").mReason == "needs_sleeping");
 
-	CHECK(NotReady(PacketReason::NotEnoughSun).mReason == "not_enough_sun");
-	CHECK(NotReady(PacketReason::Recharging).mReason == "recharging");
+	Problem aSun = NotReady(PacketReason::NotEnoughSun, "it costs 175 sun and you have 125");
+	CHECK(aSun.mReason == "not_enough_sun");
+	CHECK(aSun.mMessage == "it costs 175 sun and you have 125");
+	CHECK(NotReady(PacketReason::Recharging, "x").mReason == "recharging");
+	CHECK(NotReady(PacketReason::NoBasePlant, "x").mReason == "no_base_plant");
 	CHECK(MakeProblem(ProblemCode::NoAward).mMessage == "there's no award to collect");
 	CHECK(MakeProblem(ProblemCode::NoAward, "custom").mMessage == "custom");
 }

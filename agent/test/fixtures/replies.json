@@ -1,0 +1,62 @@
+{
+  "cant-plant-here": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "cant_plant_here",
+        "message": "peashooter can't go at column 0, row 0: that tile is dirt, where nothing grows",
+        "reason": "not_here"
+      }
+    }
+  },
+  "placed": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 987,
+      "plant": {
+        "id": 65601536,
+        "type": "peashooter",
+        "col": 0,
+        "row": 2
+      }
+    }
+  },
+  "stepped": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 1087,
+      "clock": {
+        "state": "frozen",
+        "speed": 50
+      }
+    }
+  },
+  "award-collected": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 6687
+    }
+  },
+  "suns-collected": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 14855,
+      "collected": 2,
+      "value": 50
+    }
+  },
+  "game-hint": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "cant_plant_here",
+        "message": "puff_shroom can't go at column 4, row 4: You can't plant on graves",
+        "reason": "not_on_grave"
+      }
+    }
+  }
+}

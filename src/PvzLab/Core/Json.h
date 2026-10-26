@@ -15,6 +15,7 @@ namespace PvzLab
 		std::string						mGameVersion;
 		std::string						mScene;					// empty until the first snapshot
 		uint32_t						mAppTicks = 0;
+		bool							mLoaded = false;		// the game has finished loading, so it picks requests up promptly
 	};
 
 	std::string							SnapshotToJson(const Snapshot& theSnapshot);

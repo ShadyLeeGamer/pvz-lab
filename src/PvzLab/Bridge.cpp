@@ -3,6 +3,7 @@
 #include "GameConstants.h"
 #include "LawnApp.h"
 #include "Lawn/Board.h"
+#include "Lawn/Challenge.h"
 #include "Lawn/Coin.h"
 #include "Lawn/CursorObject.h"
 #include "Lawn/CutScene.h"
@@ -14,6 +15,9 @@
 #include "Lawn/System/PlayerInfo.h"
 #include "Lawn/Widget/SeedChooserScreen.h"
 #include "Lawn/Zombie.h"
+#include "Lawn/ZenGarden.h"
+#include "PvzpLib/PvzpCommon.h"
+#include "PvzpLib/PvzpStringFile.h"
 #include "widget/Dialog.h"
 #include "widget/WidgetManager.h"
 #include <algorithm>
@@ -190,6 +194,23 @@ namespace PvzLab
 			return theBoard->StageHas6Rows() ? 6 : 5;
 		}
 
+		// The sun a player can spend now, counting sun already flying to the bank (Board::CanTakeSunMoney).
+		int SpendableSun(Board* theBoard)
+		{
+			return theBoard->mSunMoney + theBoard->CountSunBeingCollected();
+		}
+
+		// How far a packet has recharged, from 0 to 1. Capped below 1 until the game activates the packet
+		// (once the counter has passed the time), so "1" always means ready to pick up, even after rounding.
+		double RechargeFraction(const SeedPacket& thePacket)
+		{
+			if (thePacket.mActive)
+				return 1.0;
+			if (thePacket.mRefreshing && thePacket.mRefreshTime > 0)
+				return std::clamp(static_cast<double>(thePacket.mRefreshCounter) / thePacket.mRefreshTime, 0.0, 0.99);
+			return 0.0;
+		}
+
 		// Board::CanPlantAt for every tile: the same rules the game uses for a held seed.
 		std::vector<Tile> PlantableTiles(Board* theBoard, const SeedPacket& thePacket)
 		{
@@ -230,14 +251,7 @@ namespace PvzLab
 				aInfo.mCost = theBoard->GetCurrentPlantCost(aPacket.mPacketType, aPacket.mImitaterType);
 				aInfo.mReady = aPacket.CanPickUp();
 				aInfo.mHeld = aCursor != nullptr && aCursor->mCursorType == CursorType::CURSOR_TYPE_PLANT_FROM_BANK && aCursor->mSeedBankIndex == i;
-				if (aPacket.mActive)
-					aInfo.mRecharge = 1.0;
-				else if (aPacket.mRefreshing && aPacket.mRefreshTime > 0)
-					// Capped below 1: the game only activates the packet once the counter has passed the time,
-					// and "1" must mean ready to pick up, even after rounding.
-					aInfo.mRecharge = std::clamp(static_cast<double>(aPacket.mRefreshCounter) / aPacket.mRefreshTime, 0.0, 0.99);
-				else
-					aInfo.mRecharge = 0.0;
+				aInfo.mRecharge = RechargeFraction(aPacket);
 				if (aPlaying)
 					aInfo.mPlantableTiles = PlantableTiles(theBoard, aPacket);
 				theInfo.mSeedPackets.push_back(std::move(aInfo));
@@ -433,7 +447,7 @@ namespace PvzLab
 			default:							aInfo.mResult = "playing"; break;
 			}
 			aInfo.mSun = std::max(theBoard->mSunMoney, 0);
-			aInfo.mSunSpendable = theBoard->mSunMoney + theBoard->CountSunBeingCollected();
+			aInfo.mSunSpendable = SpendableSun(theBoard);
 
 			CaptureSeedPackets(theBoard, aInfo);
 			CaptureLawn(theBoard, aInfo);
@@ -463,6 +477,7 @@ namespace PvzLab
 		aSnapshot.mMode = anApp->mGameMode == GameMode::GAMEMODE_ADVENTURE ? "adventure" : "other";
 		aSnapshot.mDialogOpen = anApp->GetDialogCount() > 0;
 		aSnapshot.mMinimized = anApp->mMinimized;
+		aSnapshot.mLoaded = anApp->mLoaded;
 		// Re-read every tick: the board is null in menus and can be replaced between ticks.
 		if (anApp->mBoard != nullptr)
 			aSnapshot.mBoard = CaptureBoard(anApp, anApp->mBoard);
@@ -514,17 +529,114 @@ namespace PvzLab
 			}
 		}
 
-		// SeedPacket::CanPickUp said no; work out which of its checks failed.
+		// SeedPacket::CanPickUp said no; work out which of its checks failed. The game shows a player no
+		// words for these (the packet stays dark, or the sun counter flashes), so the numbers are given.
 		Problem WhyNotReady(LawnApp* theApp, Board* theBoard, const SeedPacket& thePacket)
 		{
 			if (theApp->IsSlotMachineLevel())
 				return MakeProblem(ProblemCode::NotReady, "seed packets can't be picked up on slot machine levels");
 			if (!thePacket.mActive)
-				return NotReady(PacketReason::Recharging);
+			{
+				int aPercent = static_cast<int>(RechargeFraction(thePacket) * 100);
+				return NotReady(PacketReason::Recharging, std::format("it's still recharging ({}% done)", aPercent));
+			}
 			int aCost = theBoard->GetCurrentPlantCost(thePacket.mPacketType, thePacket.mImitaterType);
 			if (!theBoard->CanTakeSunMoney(aCost) && !theBoard->HasConveyorBeltSeedBank())
-				return NotReady(PacketReason::NotEnoughSun);
-			return NotReady(PacketReason::NoBasePlant);
+				return NotReady(PacketReason::NotEnoughSun, std::format("it costs {} sun and you have {}", aCost, SpendableSun(theBoard)));
+			return NotReady(PacketReason::NoBasePlant, "the plant it upgrades has to be on the lawn first");
+		}
+
+		// The hint the game shows a player when a plant can't go on a tile, as a key into its string table
+		// ("" when it shows none). A copy of the choice in Board::MouseDownWithPlant, kept here so the game's
+		// own files stay as upstream wrote them: if upstream changes that choice, change this to match.
+		std::string PlantingHint(Board* theBoard, PlantingReason theReason, SeedType theSeed, int theCol, int theRow)
+		{
+			LawnApp* anApp = theBoard->mApp;
+			if (theReason == PlantingReason::PLANTING_ONLY_ON_GRAVES)
+				return "[ADVICE_GRAVEBUSTERS_ON_GRAVES]";
+			if (theSeed == SeedType::SEED_LILYPAD)
+				return theReason == PlantingReason::PLANTING_ONLY_IN_POOL ? "[ADVICE_LILYPAD_ON_WATER]" : "";
+			if (theSeed == SeedType::SEED_TANGLEKELP)
+				return theReason == PlantingReason::PLANTING_ONLY_IN_POOL ? "[ADVICE_TANGLEKELP_ON_WATER]" : "";
+			if (theSeed == SeedType::SEED_SEASHROOM)
+				return theReason == PlantingReason::PLANTING_ONLY_IN_POOL ? "[ADVICE_SEASHROOM_ON_WATER]" : "";
+			switch (theReason)
+			{
+			case PlantingReason::PLANTING_ONLY_ON_GROUND:	return "[ADVICE_POTATO_MINE_ON_LILY]";
+			case PlantingReason::PLANTING_NOT_PASSED_LINE:	return "[ADVICE_NOT_PASSED_LINE]";
+			case PlantingReason::PLANTING_NEEDS_UPGRADE:
+				switch (theSeed)
+				{
+				case SeedType::SEED_GATLINGPEA:		return "[ADVICE_ONLY_ON_REPEATERS]";
+				case SeedType::SEED_TWINSUNFLOWER:	return "[ADVICE_ONLY_ON_SUNFLOWER]";
+				case SeedType::SEED_GLOOMSHROOM:	return "[ADVICE_ONLY_ON_FUMESHROOM]";
+				case SeedType::SEED_CATTAIL:		return "[ADVICE_ONLY_ON_LILYPAD]";
+				case SeedType::SEED_WINTERMELON:	return "[ADVICE_ONLY_ON_MELONPULT]";
+				case SeedType::SEED_GOLD_MAGNET:	return "[ADVICE_ONLY_ON_MAGNETSHROOM]";
+				case SeedType::SEED_SPIKEROCK:		return "[ADVICE_ONLY_ON_SPIKEWEED]";
+				case SeedType::SEED_COBCANNON:		return "[ADVICE_ONLY_ON_KERNELPULT]";
+				default:							return "";
+				}
+			case PlantingReason::PLANTING_NOT_ON_ART:
+				return PvzpReplaceString("[ADVICE_WRONG_ART_TYPE]", "{SEED}",
+					Plant::GetNameString(theBoard->mChallenge->GetArtChallengeSeed(theCol, theRow), SeedType::SEED_NONE));
+			case PlantingReason::PLANTING_NEEDS_POT:
+				return anApp->IsFirstTimeAdventureMode() && theBoard->mLevel == 41 ? "[ADVICE_PLANT_NEED_POT1]" : "[ADVICE_PLANT_NEED_POT2]";
+			case PlantingReason::PLANTING_NOT_ON_GRAVE:		return "[ADVICE_PLANT_NOT_ON_GRAVE]";
+			case PlantingReason::PLANTING_NOT_ON_CRATER:
+				return theBoard->IsPoolSquare(theCol, theRow) ? "[ADVICE_CANT_PLANT_THERE]" : "[ADVICE_PLANT_NOT_ON_CRATER]";
+			case PlantingReason::PLANTING_NOT_ON_WATER:
+				if (anApp->mGameMode == GameMode::GAMEMODE_CHALLENGE_ZEN_GARDEN && anApp->mZenGarden->mGardenType == GardenType::GARDEN_AQUARIUM)
+					return "[ZEN_ONLY_AQUATIC_PLANTS]";
+				return theSeed == SeedType::SEED_POTATOMINE ? "[ADVICE_POTATO_MINE_ON_LILY]" : "[ADVICE_PLANT_NOT_ON_WATER]";
+			case PlantingReason::PLANTING_NEEDS_GROUND:		return "[ADVICE_PLANTING_NEEDS_GROUND]";
+			case PlantingReason::PLANTING_NEEDS_SLEEPING:	return "[ADVICE_PLANTING_NEED_SLEEPING]";
+			default:										return "";
+			}
+		}
+
+		std::string WithArticle(const std::string& theName)
+		{
+			bool aVowel = !theName.empty() && std::string_view("aeiou").find(theName.front()) != std::string_view::npos;
+			return (aVowel ? "an " : "a ") + theName;
+		}
+
+		// Why a plant can't go on a tile: the hint the game would show a player, in the game's own words,
+		// or, for the cases where the game shows none, what's on the tile.
+		std::string WhyNotHere(Board* theBoard, PlantingReason theReason, SeedType theSeed, int theCol, int theRow)
+		{
+			if (theRow >= LawnRows(theBoard))
+				return std::format("the lawn only has rows 0 to {}", LawnRows(theBoard) - 1);
+
+			std::string aHint = PlantingHint(theBoard, theReason, theSeed, theCol, theRow);
+			if (!aHint.empty())
+			{
+				std::string aText(PvzpStringTranslate(aHint));
+				std::replace(aText.begin(), aText.end(), '\n', ' ');
+				return aText;
+			}
+
+			GridSquareType aSquare = theBoard->mGridSquareType[theCol][theRow];
+			if (aSquare == GridSquareType::GRIDSQUARE_DIRT)
+				return "that tile is dirt, where nothing grows";
+			if (aSquare == GridSquareType::GRIDSQUARE_NONE)
+				return "that tile isn't part of the lawn";
+			if (theBoard->IsIceAt(theCol, theRow))
+				return "there's ice on that tile";
+			if (theBoard->GetScaryPotAt(theCol, theRow))
+				return "there's a vase on that tile";
+
+			std::vector<std::string> aPlants;
+			for (Plant* aPlant : theBoard->mPlants)
+			{
+				if (!aPlant->mDead && aPlant->mIsOnBoard && aPlant->mPlantCol == theCol && aPlant->mRow == theRow)
+					aPlants.push_back(WithArticle(PlantName(aPlant->mSeedType)));
+			}
+			if (aPlants.size() == 1)
+				return std::format("there's already {} there", aPlants[0]);
+			if (aPlants.size() > 1)
+				return std::format("there's already {} and {} there", aPlants[0], aPlants[1]);
+			return "that plant can't go there";
 		}
 
 		// A point on the tile that the game's own pixel-to-tile maths maps back to the same tile.
@@ -595,8 +707,9 @@ namespace PvzLab
 			? aBoard->CanPlantAt(theAction.mCol, theAction.mRow, aSeed) : PlantingReason::PLANTING_NOT_HERE;
 		if (aReason != PlantingReason::PLANTING_OK)
 		{
-			Problem aProblem = CantPlantHere(ToPlacementReason(aReason));
-			aProblem.mMessage = std::format("{} can't go at col {}, row {}: {}", aName, theAction.mCol, theAction.mRow, aProblem.mMessage);
+			std::string aWhy = WhyNotHere(aBoard, aReason, aSeed, theAction.mCol, theAction.mRow);
+			Problem aProblem = CantPlantHere(ToPlacementReason(aReason),
+				std::format("{} can't go at column {}, row {}: {}", aName, theAction.mCol, theAction.mRow, aWhy));
 			return Refuse(aProblem);
 		}
 

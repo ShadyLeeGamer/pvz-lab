@@ -40,7 +40,7 @@ namespace PvzLab
 			case ProblemCode::NeedsInput:		return { "needs_input", 409, "the level is waiting for a click the API can't make yet" };
 			case ProblemCode::BadSeeds:			return { "bad_seeds", 409, "this level needs its seeds chosen" };
 			case ProblemCode::Interrupted:		return { "interrupted", 409, "another control command replaced this one" };
-			case ProblemCode::Busy:				return { "busy", 503, "the game didn't pick the request up within 2 seconds (a dialog such as the Almanac or the Store may be open)" };
+			case ProblemCode::Busy:				return { "busy", 503, "the game didn't pick the request up within 2 seconds (it may still be loading, or a dialog such as the Almanac or the Store may be open)" };
 			case ProblemCode::ShuttingDown:		return { "shutting_down", 503, "the game is closing" };
 			case ProblemCode::Timeout:			return { "timeout", 504, "the game is still working on it; check /state" };
 			default:							return { "internal", 500, "something unexpected happened" };
@@ -301,46 +301,40 @@ namespace PvzLab
 		return aProblem;
 	}
 
-	Problem CantPlantHere(PlacementReason theReason)
+	// The reason names are the game's own (PlantingReason), without the PLANTING_ prefix. The message
+	// comes from the game side: the game's hint for that rule, or what's on the tile.
+	Problem CantPlantHere(PlacementReason theReason, std::string theMessage)
 	{
 		const char* aReason = "not_here";
-		const char* aMessage = "that plant can't go there";
 		switch (theReason)
 		{
-		case PlacementReason::OnlyOnGraves:		aReason = "only_on_graves";		aMessage = "it can only go on a gravestone"; break;
-		case PlacementReason::OnlyInPool:		aReason = "only_in_pool";		aMessage = "it can only go in water"; break;
-		case PlacementReason::OnlyOnGround:		aReason = "only_on_ground";		aMessage = "it can only go on land"; break;
-		case PlacementReason::NeedsPot:			aReason = "needs_pot";			aMessage = "on the roof it needs a flower pot first"; break;
-		case PlacementReason::NotOnArt:			aReason = "not_on_art";			aMessage = "it doesn't fit this level's picture"; break;
-		case PlacementReason::NotPassedLine:	aReason = "not_passed_line";	aMessage = "it can't go past the red line"; break;
-		case PlacementReason::NeedsUpgradeBase:	aReason = "needs_upgrade_base";	aMessage = "it only goes on top of the plant it upgrades"; break;
-		case PlacementReason::NotOnGrave:		aReason = "not_on_grave";		aMessage = "it can't go on a gravestone"; break;
-		case PlacementReason::NotOnCrater:		aReason = "not_on_crater";		aMessage = "it can't go in a crater"; break;
-		case PlacementReason::NotOnWater:		aReason = "not_on_water";		aMessage = "in water it needs a lily pad first"; break;
-		case PlacementReason::NeedsGround:		aReason = "needs_ground";		aMessage = "it needs bare ground"; break;
-		case PlacementReason::NeedsSleeping:	aReason = "needs_sleeping";		aMessage = "it only goes on a sleeping mushroom"; break;
+		case PlacementReason::OnlyOnGraves:		aReason = "only_on_graves"; break;
+		case PlacementReason::OnlyInPool:		aReason = "only_in_pool"; break;
+		case PlacementReason::OnlyOnGround:		aReason = "only_on_ground"; break;
+		case PlacementReason::NeedsPot:			aReason = "needs_pot"; break;
+		case PlacementReason::NotOnArt:			aReason = "not_on_art"; break;
+		case PlacementReason::NotPassedLine:	aReason = "not_passed_line"; break;
+		case PlacementReason::NeedsUpgradeBase:	aReason = "needs_upgrade_base"; break;
+		case PlacementReason::NotOnGrave:		aReason = "not_on_grave"; break;
+		case PlacementReason::NotOnCrater:		aReason = "not_on_crater"; break;
+		case PlacementReason::NotOnWater:		aReason = "not_on_water"; break;
+		case PlacementReason::NeedsGround:		aReason = "needs_ground"; break;
+		case PlacementReason::NeedsSleeping:	aReason = "needs_sleeping"; break;
 		default:								break;
 		}
-		Problem aProblem = MakeProblem(ProblemCode::CantPlantHere, aMessage);
+		Problem aProblem = MakeProblem(ProblemCode::CantPlantHere, std::move(theMessage));
 		aProblem.mReason = aReason;
 		return aProblem;
 	}
 
-	Problem NotReady(PacketReason theReason)
+	Problem NotReady(PacketReason theReason, std::string theMessage)
 	{
 		const char* aReason = "recharging";
-		const char* aMessage = "the seed packet is still recharging";
 		if (theReason == PacketReason::NotEnoughSun)
-		{
 			aReason = "not_enough_sun";
-			aMessage = "there isn't enough sun";
-		}
 		else if (theReason == PacketReason::NoBasePlant)
-		{
 			aReason = "no_base_plant";
-			aMessage = "the plant it upgrades has to be on the lawn first";
-		}
-		Problem aProblem = MakeProblem(ProblemCode::NotReady, aMessage);
+		Problem aProblem = MakeProblem(ProblemCode::NotReady, std::move(theMessage));
 		aProblem.mReason = aReason;
 		return aProblem;
 	}

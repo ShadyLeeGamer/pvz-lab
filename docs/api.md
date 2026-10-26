@@ -32,10 +32,10 @@ Answers as soon as the game has started, even before the first tick.
 ```json
 { "apiVersion": 1, "ok": true,
   "build": { "commit": "e0e9144", "builtAt": "25 Oct 2026 01:40", "gameVersion": "0.2.5-3-g3838ec219d1a" },
-  "scene": "loading", "appTicks": 412 }
+  "scene": "loading", "appTicks": 412, "loaded": false }
 ```
 
-`scene` is `null` until the first tick.
+`scene` is `null` until the first tick. `loaded` turns `true` once the game has finished loading. Until then its loop can stall for a second or more, so a request can be withdrawn as `503 busy`: wait for `loaded` before sending requests.
 
 ## GET /state
 
@@ -154,7 +154,7 @@ Not handled yet: zombies hidden by fog (Adventure levels 31–40) and by Stormy 
 
 - The game carries out requests between ticks, on its own thread, through the same functions a mouse click reaches. The game's rules, costs, recharge times, sounds and tutorial all apply as they do for a player.
 - A reply is sent once the change is made, and `/state` already shows it by then.
-- A request the game hasn't picked up within 2 seconds is withdrawn, so it never happens late (`503 busy`). That happens while a dialog such as the Almanac runs its own loop.
+- A request the game hasn't picked up within 2 seconds is withdrawn, so it never happens late (`503 busy`). That happens while a dialog such as the Almanac runs its own loop, and can happen while the game is still loading (see `loaded` in `GET /health`).
 - The player's mouse still works. Actions are refused while the player is holding a seed or a tool.
 
 ## POST /actions
@@ -180,8 +180,8 @@ A collected sun counts in `sunSpendable` straight away and reaches `sun` when it
 `placePlant` checks the tile with the game's own placement rules before anything is clicked, so a refused plant changes nothing. The refusal says why:
 
 ```json
-{ "error": { "code": "cant_plant_here", "reason": "only_in_pool",
-  "message": "lily_pad can't go at col 3, row 0: it can only go in water" } }
+{ "error": { "code": "cant_plant_here", "reason": "not_here",
+  "message": "sunflower can't go at column 2, row 0: there's already a sunflower there" } }
 ```
 
 ## POST /control
@@ -226,8 +226,8 @@ Every control command takes over the clock, so one still running (a step, or a l
 | 409 | `not_playing`, `paused`, `dialog_open`, `level_ending` | No level can be acted on right now. |
 | 409 | `cursor_busy` | The player is holding a seed or a tool. |
 | 409 | `no_such_slot`, `no_such_sun`, `no_award` | Nothing there to use. |
-| 409 | `not_ready` | The seed packet can't be picked up; `reason` is `recharging`, `not_enough_sun` or `no_base_plant`. |
-| 409 | `cant_plant_here` | The game's placement rules say no; `reason` is the game's own reason. |
+| 409 | `not_ready` | The seed packet can't be picked up; `reason` is `recharging`, `not_enough_sun` or `no_base_plant`. The message gives the numbers, e.g. `it costs 175 sun and you have 125` or `it's still recharging (80% done)`. |
+| 409 | `cant_plant_here` | The game's placement rules say no; `reason` is the game's own reason (`PlantingReason`). The message is the hint the game shows a player for that rule, in the game's own words, or, where the game shows none, what's on the tile (another plant, dirt, ice or a vase). |
 | 409 | `no_profile`, `needs_input`, `bad_seeds` | A level can't be started (see `startLevel`). |
 | 409 | `interrupted` | A newer control command replaced this one. |
 | 500 | `internal` | Something unexpected; the message says what. |

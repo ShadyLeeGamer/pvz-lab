@@ -115,7 +115,7 @@ namespace PvzLab
 		std::optional<ClockInfo>		mClock;					// every control command
 	};
 
-	// Board::CanPlantAt's reasons, in our words.
+	// Board::CanPlantAt's reasons (the game's PlantingReason).
 	enum class PlacementReason
 	{
 		NotHere,
@@ -148,8 +148,8 @@ namespace PvzLab
 	std::string							LevelName(int theLevel);					// 1 -> "1-1"
 
 	Problem								MakeProblem(ProblemCode theCode, std::string theMessage = {});
-	Problem								CantPlantHere(PlacementReason theReason);
-	Problem								NotReady(PacketReason theReason);
+	Problem								CantPlantHere(PlacementReason theReason, std::string theMessage);
+	Problem								NotReady(PacketReason theReason, std::string theMessage);
 	const char*							ProblemName(ProblemCode theCode);			// e.g. "cant_plant_here"
 	int									HttpStatus(ProblemCode theCode);
 }

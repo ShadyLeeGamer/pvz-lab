@@ -127,6 +127,7 @@ namespace PvzLab
 			{
 				aReport.mScene = aSnapshot->mScene;
 				aReport.mAppTicks = aSnapshot->mAppTicks;
+				aReport.mLoaded = aSnapshot->mLoaded;
 			}
 			SendJson(theResponse, 200, HealthToJson(aReport));
 		});

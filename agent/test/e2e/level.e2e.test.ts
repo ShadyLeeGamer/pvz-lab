@@ -1,20 +1,18 @@
 // Plays real levels through the local API: starts 1-1 from the title screen, plants, steps time,
-// collects sun, wins with a plain script, moves on to the next level, and picks seeds on 1-8.
-// The tests run in order and share one game.
+// collects sun, wins with a plain script, moves on to the next level, picks seeds on 1-8, and starts
+// a level in each later world. The tests run in order and share one game.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { launchGame, readGameConfig, type RunningGame } from "../../src/game-process.ts";
 import { GameApi, type Json } from "./api.ts";
-import { launchGame, readGameConfig, type RunningGame } from "./game.ts";
-
-const config = readGameConfig();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-describe.skipIf(!config)("playing levels through the API (launches the game; needs agent/.env)", () => {
+describe("playing levels through the API (launches the game; needs agent/.env)", () => {
   let game: RunningGame | undefined;
   let api: GameApi;
 
   beforeAll(async () => {
-    game = await launchGame(config!);
+    game = await launchGame(readGameConfig());
     api = new GameApi(game.baseUrl);
   });
 
@@ -49,7 +47,11 @@ describe.skipIf(!config)("playing levels through the API (launches the game; nee
   it("refuses a plant the rules forbid, and nothing changes", async () => {
     const { status, body } = await api.act({ type: "placePlant", slot: 0, col: 3, row: 0 });
     expect(status).toBe(409);
-    expect(body.error).toMatchObject({ code: "cant_plant_here", reason: "not_here" });
+    expect(body.error).toMatchObject({
+      code: "cant_plant_here",
+      reason: "not_here",
+      message: "peashooter can't go at column 3, row 0: that tile is dirt, where nothing grows",
+    });
 
     const state = await api.state();
     expect(state.board.sun).toBe(150);
@@ -72,7 +74,7 @@ describe.skipIf(!config)("playing levels through the API (launches the game; nee
   it("refuses to plant while the packet recharges", async () => {
     const { status, body } = await api.act({ type: "placePlant", slot: 0, col: 1, row: 2 });
     expect(status).toBe(409);
-    expect(body.error).toMatchObject({ code: "not_ready", reason: "recharging" });
+    expect(body.error).toMatchObject({ code: "not_ready", reason: "recharging", message: "peashooter isn't ready: it's still recharging (0% done)" });
   });
 
   it("steps exactly the ticks asked for, then freezes again", async () => {
@@ -174,6 +176,20 @@ describe.skipIf(!config)("playing levels through the API (launches the game; nee
     expect(state.board.seedPackets.map((packet: Json) => packet.plant)).toEqual(["peashooter", "sunflower"]);
   }, 150_000);
 
+  it("starts each later level up to 1-7 without asking for seeds (1-5 is a mini-game that opens with Crazy Dave)", async () => {
+    for (const levelName of ["1-3", "1-4", "1-6", "1-7"]) {
+      const { status, body } = await api.control({ type: "startLevel", level: levelName });
+      expect(status, `${levelName}: ${JSON.stringify(body)}`).toBe(200);
+      const state = await api.state();
+      expect(state.scene).toBe("playing");
+      expect(state.board.levelName).toBe(levelName);
+      expect(state.board.seedPackets.length).toBeGreaterThan(0);
+    }
+    const bowling = await api.control({ type: "startLevel", level: "1-5" });
+    expect(bowling.status).toBe(409);
+    expect(bowling.body.error.code).toBe("needs_input");
+  }, 240_000);
+
   it("on a level with a seed chooser, lists the choices, then plays with the seeds picked", async () => {
     const refused = await api.control({ type: "startLevel", level: "1-8" });
     expect(refused.status).toBe(409);
@@ -215,4 +231,63 @@ describe.skipIf(!config)("playing levels through the API (launches the game; nee
     expect((await api.get("/health")).status).toBe(200);
     expect((await api.control({ type: "freeze" })).status).toBe(200);
   }, 60_000);
+
+  it("starts a level in each later world once given seeds, and refuses levels that open with Crazy Dave", async () => {
+    for (const [levelName, stage] of [["2-7", "night"], ["3-2", "pool"], ["4-2", "fog"], ["5-2", "roof"]]) {
+      const asked = await api.control({ type: "startLevel", level: levelName });
+      expect(asked.body.error?.code, `${levelName}: ${JSON.stringify(asked.body)}`).toBe("bad_seeds");
+      const seeds = asked.body.error.choices.slice(0, asked.body.error.pick);
+      const { status, body } = await api.control({ type: "startLevel", level: levelName, seeds });
+      expect(status, `${levelName}: ${JSON.stringify(body)}`).toBe(200);
+      const state = await api.state();
+      expect(state.board).toMatchObject({ levelName, stage });
+      expect(state.board.seedPackets.map((packet: Json) => packet.plant)).toEqual(seeds);
+    }
+    const dave = await api.control({ type: "startLevel", level: "2-1" });
+    expect(dave.status).toBe(409);
+    expect(dave.body.error.code).toBe("needs_input");
+  }, 300_000);
+
+  it("explains refusals: the game's own hint where it has one, what a packet costs, and what's on a taken tile", async () => {
+    const seeds = ["puff_shroom", "grave_buster", "sun_shroom", "fume_shroom", "wall_nut", "cherry_bomb"];
+    const { status, body } = await api.control({ type: "startLevel", level: "2-7", seeds });
+    expect(status, JSON.stringify(body)).toBe(200);
+    const state = await api.state();
+    const packets: Json[] = state.board.seedPackets;
+    const puff = packets.findIndex((packet) => packet.plant === "puff_shroom");
+
+    // Not ready: the numbers, since the game only darkens the packet or flashes the sun counter.
+    const pricey = packets.find((packet) => packet.recharge === 1 && packet.cost > state.board.sunSpendable);
+    expect(pricey, "a recharged packet that costs more than the starting sun").toBeDefined();
+    const unaffordable = await api.act({ type: "placePlant", slot: pricey.slot, col: 4, row: 2 });
+    expect(unaffordable.body.error).toMatchObject({
+      reason: "not_enough_sun",
+      message: `${pricey.plant} isn't ready: it costs ${pricey.cost} sun and you have ${state.board.sunSpendable}`,
+    });
+    const charging = packets.find((packet) => packet.recharge < 1);
+    expect(charging, "a packet that starts the level recharging").toBeDefined();
+    const early = await api.act({ type: "placePlant", slot: charging.slot, col: 4, row: 2 });
+    expect(early.body.error).toMatchObject({
+      reason: "recharging",
+      message: `${charging.plant} isn't ready: it's still recharging (${Math.floor(charging.recharge * 100)}% done)`,
+    });
+
+    // A rule the game explains to players: its own hint, in the game's words.
+    const grave = state.board.lawn.items.find((item: Json) => item.type === "grave");
+    expect(grave, "2-7 starts with gravestones").toBeDefined();
+    const onGrave = await api.act({ type: "placePlant", slot: puff, col: grave.col, row: grave.row });
+    expect(onGrave.body.error.reason).toBe("not_on_grave");
+    // The game's own words from its string table (English game data), not the key or a sentence of ours.
+    expect(onGrave.body.error.message).toBe(`puff_shroom can't go at column ${grave.col}, row ${grave.row}: You can't plant on graves`);
+
+    // A taken tile: the game shows nothing, so the reply says what's there.
+    const tile = packets[puff].plantableTiles[0];
+    expect((await api.act({ type: "placePlant", slot: puff, col: tile.col, row: tile.row })).status).toBe(200);
+    await api.stepUntil((s) => s.board.seedPackets[puff].ready);
+    const taken = await api.act({ type: "placePlant", slot: puff, col: tile.col, row: tile.row });
+    expect(taken.body.error).toMatchObject({
+      reason: "not_here",
+      message: `puff_shroom can't go at column ${tile.col}, row ${tile.row}: there's already a puff_shroom there`,
+    });
+  }, 150_000);
 });

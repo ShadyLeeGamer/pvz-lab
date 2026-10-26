@@ -177,6 +177,7 @@ namespace PvzLab
 		ClockInfo						mClock;
 		bool							mDialogOpen = false;	// a game dialog (options, game over, ...) is open
 		bool							mMinimized = false;		// game time stands still while the window is minimized
+		bool							mLoaded = false;		// the game has finished loading; until then its loop can stall
 		std::optional<BoardInfo>		mBoard;					// empty outside a level
 	};
 }

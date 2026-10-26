@@ -1,0 +1,15 @@
+{
+  "apiVersion": 1,
+  "view": "player",
+  "appTicks": 7287,
+  "scene": "award",
+  "mode": "adventure",
+  "modeId": 0,
+  "clock": {
+    "state": "frozen",
+    "speed": 50
+  },
+  "dialogOpen": false,
+  "minimized": false,
+  "board": null
+}

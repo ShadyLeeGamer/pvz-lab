@@ -1,0 +1,9 @@
+{
+  "level": "1-8",
+  "seeds": ["peashooter", "sunflower", "cherry_bomb", "wall_nut", "potato_mine", "snow_pea"],
+  "clock": "waits",
+  "speed": 1,
+  "tools": ["get_state", "place_plant", "collect_sun", "wait"],
+  "brief": "../prompts/play.md",
+  "maxTurns": 400
+}

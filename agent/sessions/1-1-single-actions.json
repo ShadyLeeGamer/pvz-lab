@@ -1,0 +1,8 @@
+{
+  "level": "1-1",
+  "clock": "waits",
+  "speed": 1,
+  "tools": ["get_state", "place_plant", "collect_sun", "wait"],
+  "brief": "../prompts/play.md",
+  "maxTurns": 400
+}
