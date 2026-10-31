@@ -7,9 +7,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import type { Action, Control, Game, GameState, Result } from "../src/game-client.ts";
 import type { GameStarter } from "../src/mcp/own-game.ts";
-import { normalizePlantName, registerTools } from "../src/mcp/tools.ts";
+import { normalizePlantName, registerTools, streetLine } from "../src/mcp/tools.ts";
 import type { ToolName } from "../src/session.ts";
-import { fixture, reply } from "./fixtures/fixture.ts";
+import { fixture, reply, savedReply } from "./fixtures/fixture.ts";
 
 // Hands out the given states in order (the last one repeats), answers with the game's replies, and
 // records what it's asked to do.
@@ -175,7 +175,9 @@ describe("MCP tools", () => {
     const game = new StandInGame(fixture("1-8-midgame"));
     const { text } = await call(await connect(game), "collect_sun");
     expect(game.actions).toEqual([{ type: "collectSun" }]);
-    expect(text.split("\n")[0]).toBe("Collected 3 suns worth 75.");
+    // The recording has two suns or more (capture.ts makes sure), and changes each time it's made.
+    const { collected, value } = savedReply("suns-collected").body as { collected: number; value: number };
+    expect(text.split("\n")[0]).toBe(`Collected ${collected} suns worth ${value}.`);
   });
 
   it("wait runs exactly the game time asked for while the game is paused, at the session's speed", async () => {
@@ -250,7 +252,11 @@ describe("start_level, for chat apps", () => {
     expect(starter.started).toBe(true);
     expect(game.controls).toEqual([{ type: "startLevel", level: "1-1", then: "freeze" }]);
     expect(isError).toBe(false);
-    expect(text.split("\n")[0]).toBe("Level 1-1 started. The game is paused while you think.");
+    expect(text.split("\n").slice(0, 3)).toEqual([
+      "Level 1-1 started. The game is paused while you think.",
+      "The street shows the zombies coming in this level: zombie.",
+      "",
+    ]);
     expect(text).toContain("Level 1-1 (day)");
   });
 
@@ -268,6 +274,7 @@ describe("start_level, for chat apps", () => {
     expect(isError).toBe(false);
     expect(text).toBe(
       "Level 1-8 asks you to choose 6 seed packets first.\n" +
+        "The street shows the zombies coming in this level: zombie, conehead_zombie, buckethead_zombie.\n" +
         "You can choose from: peashooter (100 sun), sunflower (50 sun), cherry_bomb (150 sun), wall_nut (50 sun), " +
         "potato_mine (25 sun), snow_pea (175 sun), chomper (150 sun).\n" +
         "Call start_level again with the 6 you pick.",
@@ -297,6 +304,14 @@ describe("start_level, for chat apps", () => {
     expect(await call(client, "wait", { seconds: 1 })).toEqual({ text: NO_GAME_YET, isError: true });
     expect(game.actions).toEqual([]);
     expect(game.controls).toEqual([]);
+  });
+});
+
+describe("streetLine", () => {
+  it("names the street's zombies, and says nothing when the game showed none", () => {
+    expect(streetLine(["zombie", "pole_vaulting_zombie"])).toBe("The street shows the zombies coming in this level: zombie, pole_vaulting_zombie.");
+    expect(streetLine([])).toBe("");
+    expect(streetLine(undefined)).toBe("");
   });
 });
 

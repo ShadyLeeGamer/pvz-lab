@@ -102,6 +102,7 @@ namespace PvzLab
 		std::vector<std::string>		mChoices;				// bad_seeds: the seeds that can be picked
 		std::vector<int>				mChoiceCosts;			// bad_seeds: their sun costs, as the seed chooser shows them
 		int								mPick = 0;				// bad_seeds: how many to pick
+		std::vector<std::string>		mZombies;				// bad_seeds: the zombie types waiting on the street
 	};
 
 	// A plant an action planted or dug up.
@@ -123,6 +124,7 @@ namespace PvzLab
 		std::optional<int>				mSunValue;				// collectSun
 		std::optional<int>				mLevel;					// startLevel
 		std::string						mLevelName;				// startLevel
+		std::vector<std::string>		mZombies;				// startLevel: the zombie types the intro showed on the street
 		std::optional<ClockInfo>		mClock;					// every control command
 	};
 

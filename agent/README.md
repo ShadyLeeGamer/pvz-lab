@@ -48,7 +48,7 @@ It launches its own copy of the game and starts the level, frozen. With the `"re
 - No Claude Code memory or `CLAUDE.md` files. It runs in an empty folder outside the repo, because when started inside it, Claude Code gave it the index of the notes it keeps about this project.
 - It plays on your Claude subscription. The API key variables are removed, so it never uses paid API.
 
-The terminal shows what Claude says, each tool call, and the first line of each answer, such as `Planted a peashooter at column 0, row 2.` The game window shows the rest.
+Before Claude starts, the terminal shows the zombies waiting on the street in the level's intro, which Claude is told too, as a player would see them. Then it shows what Claude says, each tool call, and the first line of each answer, such as `Planted a peashooter at column 0, row 2.` The game window shows the rest.
 
 Ctrl+C stops a run cleanly. Claude Code and the game close, the temporary folders go, and `result.json` says `stopped`. Press it twice to quit at once.
 
@@ -60,7 +60,7 @@ The tools answer with a short text summary of the player view: a map of the lawn
 
 The MCP server also works in apps that run MCP servers on your computer, such as Claude Desktop, Claude Code's own chat, VS Code or Cursor. Give it a session that offers `start_level` instead of setting a `level` (such as `sessions/chat.json`), and no `PVZ_API_URL`:
 - The server starts its own copy of the game at the first `start_level`, and closes it when the app closes the server.
-- `start_level` takes a level such as `2-7`. From 1-8 on, the game first asks for seeds: called without them, `start_level` lists the choices and what each costs.
+- `start_level` takes a level such as `2-7`. From 1-8 on, the game first asks for seeds: called without them, `start_level` lists the choices, what each costs and the zombies waiting on the street, as the seed chooser screen shows them. Called again with seeds, it picks them on that same screen, so the level played is the one shown. The reply to a start names the street's zombies too.
 - The session's clock, speed and tools apply. Its instructions reach the app as the server's instructions, and there's a `play_level` prompt.
 - Unlike `pnpm play`, the app isn't locked down: your other tools, memory and settings come along.
 - `node` on your PATH must be Node 24 or later.
@@ -89,7 +89,7 @@ Then ask, say, "play level 2-7". The game window opens at the first level. If th
   - the session files, the client's handling of a busy game, and the lines `pnpm play` prints (against events from a real run)
 - End-to-end tests play real levels.
   - They start 1-1 from the title screen, plant, collect sun, and win it at high speed.
-  - Then they move on to 1-2, start each level up to 1-7, and pick seeds on 1-8.
+  - Then they move on to 1-2, start each level up to 1-7, and pick seeds on 1-8 on the same seed chooser screen that showed the street's zombies.
   - They dig plants up with the shovel, including a pumpkin, the plant inside it and the flower pot under them on the roof, in the order the game allows.
   - Another drives the MCP server against the game, the way Claude Code does.
   - Another runs the server the way a chat app does: it starts its own game at `start_level`, asks for seeds with their costs, and closes the game when the app closes the server.

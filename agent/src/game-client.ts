@@ -94,6 +94,7 @@ const ApiError = z.object({
   choices: z.array(z.string()).optional(),
   costs: z.array(z.number().int()).optional(),
   pick: z.number().int().optional(),
+  zombies: z.array(z.string()).optional(),
 });
 export type ApiError = z.infer<typeof ApiError>;
 
@@ -105,6 +106,7 @@ const Success = z.object({
   value: z.number().int().optional(),
   level: z.number().int().optional(),
   levelName: z.string().optional(),
+  zombies: z.array(z.string()).optional(),
 });
 export type Success = z.infer<typeof Success>;
 

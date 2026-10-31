@@ -93,6 +93,18 @@ TEST_CASE("a successful reply says ok, with what happened")
 	CHECK(aJson.at("plant").at("type") == "peashooter");
 	CHECK(aJson.at("plant").at("row") == 2);
 	CHECK_FALSE(aJson.contains("clock"));
+	CHECK_FALSE(aJson.contains("zombies"));
+}
+
+TEST_CASE("a level start says which zombies its intro showed on the street")
+{
+	Reply aReply;
+	aReply.mLevel = 21;
+	aReply.mLevelName = "3-1";
+	aReply.mZombies = { "zombie", "ducky_tube_zombie" };
+	json aJson = json::parse(ReplyToJson(aReply));
+	CHECK(aJson.at("levelName") == "3-1");
+	CHECK(aJson.at("zombies") == json::array({ "zombie", "ducky_tube_zombie" }));
 }
 
 TEST_CASE("a refused request uses the error shape, with the game's reason")
@@ -111,12 +123,14 @@ TEST_CASE("a refused request uses the error shape, with the game's reason")
 	aSeeds.mChoices = { "peashooter", "sunflower" };
 	aSeeds.mChoiceCosts = { 100, 50 };
 	aSeeds.mPick = 1;
+	aSeeds.mZombies = { "zombie", "conehead_zombie" };
 	Reply aSeedsReply;
 	aSeedsReply.mProblem = aSeeds;
 	json aSeedsJson = json::parse(ReplyToJson(aSeedsReply));
 	CHECK(aSeedsJson.at("error").at("choices") == json::array({ "peashooter", "sunflower" }));
 	CHECK(aSeedsJson.at("error").at("costs") == json::array({ 100, 50 }));
 	CHECK(aSeedsJson.at("error").at("pick") == 1);
+	CHECK(aSeedsJson.at("error").at("zombies") == json::array({ "zombie", "conehead_zombie" }));
 }
 
 TEST_CASE("errors and health reports have a stable shape")

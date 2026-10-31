@@ -36,6 +36,7 @@ namespace PvzLab
 			std::shared_ptr<PendingRequest>	mPending;
 			std::optional<StartLevel>		mStart;					// empty for a step
 			bool							mLevelBegun = false;	// the level's intro is under way
+			std::vector<std::string>		mStreetZombies;			// what the intro showed on the street
 		};
 		std::optional<LongRequest> gLong;
 
@@ -139,8 +140,18 @@ namespace PvzLab
 			{
 				if (!GameLoaded())
 					return;
-				aProblem = BeginLevel(gLong->mStart->mLevel);
-				gLong->mLevelBegun = !aProblem;
+				// Already at this level's seed chooser (an earlier start asked for seeds): choose on it, as a player
+				// does, so the level played is the one whose street was shown. Starting it again would pick new waves.
+				const std::optional<int>& aLevel = gLong->mStart->mLevel;
+				if (aLevel && *aLevel == CurrentLevel() && WhatIntroWaitsFor() == IntroWait::SeedChooser)
+				{
+					gLong->mLevelBegun = true;
+				}
+				else
+				{
+					aProblem = BeginLevel(aLevel);
+					gLong->mLevelBegun = !aProblem;
+				}
 			}
 			else
 			{
@@ -248,6 +259,12 @@ namespace PvzLab
 
 		gInTick = true;
 		bool aKeepGoing = gClock.AfterTick(!WindowMinimized());
+		// The street zombies leave when the intro ends, and an intro can run through in one frame, so look every tick.
+		if (gLong && gLong->mStart && gLong->mLevelBegun)
+		{
+			if (std::vector<std::string> aStreet = StreetZombies(); !aStreet.empty())
+				gLong->mStreetZombies = std::move(aStreet);
+		}
 		if (gLong && gLong->mStart && gLong->mLevelBegun && PlayStarted())
 		{
 			if (gLong->mStart->mThenRun)
@@ -259,6 +276,7 @@ namespace PvzLab
 			{
 				aReply.mLevel = aLevel;
 				aReply.mLevelName = LevelName(aLevel);
+				aReply.mZombies = gLong->mStreetZombies;
 			}
 			FinishLong(std::move(aReply));
 			aKeepGoing = false;		// the rest of this frame follows the new clock setting from the next frame

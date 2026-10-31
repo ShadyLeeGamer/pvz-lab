@@ -3,9 +3,12 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 1158,
+      "appTicks": 884,
       "level": 1,
       "levelName": "1-1",
+      "zombies": [
+        "zombie"
+      ],
       "clock": {
         "state": "frozen",
         "speed": 1
@@ -35,7 +38,7 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 1158,
+      "appTicks": 884,
       "plant": {
         "id": 65601536,
         "type": "peashooter",
@@ -48,7 +51,7 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 1258,
+      "appTicks": 984,
       "clock": {
         "state": "frozen",
         "speed": 50
@@ -59,14 +62,14 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 6758
+      "appTicks": 6284
     }
   },
   "ran": {
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 8214,
+      "appTicks": 7740,
       "clock": {
         "state": "running",
         "speed": 1
@@ -97,7 +100,12 @@
           175,
           150
         ],
-        "pick": 6
+        "pick": 6,
+        "zombies": [
+          "zombie",
+          "conehead_zombie",
+          "buckethead_zombie"
+        ]
       }
     }
   },
@@ -105,7 +113,7 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 14527,
+      "appTicks": 13453,
       "plant": {
         "id": 65601536,
         "type": "sunflower",
@@ -127,9 +135,9 @@
     "status": 200,
     "body": {
       "ok": true,
-      "appTicks": 14827,
-      "collected": 3,
-      "value": 75
+      "appTicks": 13753,
+      "collected": 2,
+      "value": 50
     }
   },
   "game-hint": {

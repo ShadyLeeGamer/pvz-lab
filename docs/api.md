@@ -207,21 +207,24 @@ Controls game time and starts levels, as `{ "type": ..., ...fields }`.
 
 **`startLevel`:**
 - `level`: `1`–`50`, or a name from `"1-1"` to `"5-10"`. Without it, the profile's current Adventure level, which is the next one after a win.
-- `seeds`: the plants to pick, by name, for levels that make you choose. If they're missing or wrong, the reply lists what can be picked, with each one's sun cost (`costs`), as the seed chooser shows it:
+- `seeds`: the plants to pick, by name, for levels that make you choose. If they're missing or wrong, the reply lists what can be picked, with each one's sun cost (`costs`), as the seed chooser shows it, and the zombie types waiting on the street next to it (`zombies`):
   ```json
   { "error": { "code": "bad_seeds", "message": "this level makes you choose 6 seeds; \"seeds\" has 0",
     "choices": ["peashooter", "sunflower", "cherry_bomb", "wall_nut", "potato_mine", "snow_pea", "chomper"],
-    "costs": [100, 50, 150, 50, 25, 175, 150], "pick": 6 } }
+    "costs": [100, 50, 150, 50, 25, 175, 150], "pick": 6,
+    "zombies": ["zombie", "conehead_zombie", "buckethead_zombie"] } }
   ```
+  The level then waits at its seed chooser. A `startLevel` for the same `level` picks the seeds there, so the level played is the one whose street was shown. Starting it any other way picks new waves.
+- The street shows one or more of each zombie type in the level's waves. The game leaves out the flag zombie that leads a big wave, and always adds a ducky tube zombie on pool levels.
 - `then`: `"freeze"` (default) or `"run"` once play has started.
 - It waits for the game to finish loading, closes a "game over" or "continue?" dialog, and leaves the title screen, menus or award screen the way the game's own buttons do.
 - Like the game's own level select, it sets the profile's Adventure level and drops any saved game for that mode. Use a separate save folder (`-savedir`) for experiments.
 - Not supported yet: levels that start with Crazy Dave talking or the shovel tutorial (`409 needs_input`), and picking the Imitater.
 
-Every control command takes over the clock, so one still running (a step, or a level start) is answered `409 interrupted`. Replies carry the clock afterwards:
+Every control command takes over the clock, so one still running (a step, or a level start) is answered `409 interrupted`. Replies carry the clock afterwards. A level start also says which zombie types its intro showed on the street:
 
 ```json
-{ "ok": true, "appTicks": 4180, "level": 1, "levelName": "1-1", "clock": { "state": "frozen", "speed": 1 } }
+{ "ok": true, "appTicks": 4180, "level": 1, "levelName": "1-1", "zombies": ["zombie"], "clock": { "state": "frozen", "speed": 1 } }
 ```
 
 `clock.state` is `running`, `frozen`, `stepping` or `fast_forward` (while a level starts).

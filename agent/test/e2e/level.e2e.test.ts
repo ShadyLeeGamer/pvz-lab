@@ -23,7 +23,8 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
   it("starts 1-1 from the title screen and freezes at the first moment of play", async () => {
     const { status, body } = await api.control({ type: "startLevel", level: "1-1" });
     expect(status, JSON.stringify(body)).toBe(200);
-    expect(body).toMatchObject({ ok: true, level: 1, levelName: "1-1", clock: { state: "frozen" } });
+    // The intro's street shows 1-1's only zombie type.
+    expect(body).toMatchObject({ ok: true, level: 1, levelName: "1-1", clock: { state: "frozen" }, zombies: ["zombie"] });
 
     const state = await api.state();
     expect(state.scene).toBe("playing");
@@ -136,11 +137,13 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
 
   it("wins 1-1 with a plain script: plant when ready, collect sun, collect the award", async () => {
     let sawZombies = false;
+    const types = new Set<string>();
     let state: Json = await api.state();
     for (let i = 0; !state.board.award; i++) {
       expect(i, "1-1 should be won within 400 steps").toBeLessThan(400);
       expect(state.board.result).toBe("playing");
       sawZombies ||= state.board.zombies.length > 0;
+      for (const zombie of state.board.zombies) types.add(zombie.type);
 
       if (state.board.suns.some((sun: Json) => !sun.beingCollected)) {
         expect((await api.act({ type: "collectSun" })).status).toBe(200);
@@ -157,6 +160,8 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
 
     // Zombies only come once the tutorial has finished, so seeing them shows the tutorial ran its course.
     expect(sawZombies).toBe(true);
+    // Only what the street showed came, plus the flag zombie leading the last wave, which the street never shows.
+    for (const type of types) expect(["zombie", "flag_zombie"]).toContain(type);
     expect(state.board.progress.wave).toBe(state.board.progress.totalWaves);
     expect(state.board.result).toBe("won");
 
@@ -225,18 +230,28 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
   }, 150_000);
 
   it("on a level with a seed chooser, lists the choices, then plays with the seeds picked", async () => {
+    const before = (await api.state()).appTicks;
     const refused = await api.control({ type: "startLevel", level: "1-8" });
+    const atChooser = (await api.state()).appTicks;
     expect(refused.status).toBe(409);
     expect(refused.body.error.code).toBe("bad_seeds");
-    const { choices, pick } = refused.body.error;
+    const { choices, pick, zombies } = refused.body.error;
     expect(pick).toBeGreaterThan(0);
     expect(choices).toContain("peashooter");
     expect(choices.length).toBeGreaterThanOrEqual(pick);
+    // The street next to the seed chooser: more than 1-1's plain zombies by now.
+    expect(zombies).toContain("zombie");
+    expect(zombies.length).toBeGreaterThan(1);
 
     const seeds = choices.slice(choices.length - pick);
     const { status, body } = await api.control({ type: "startLevel", level: "1-8", seeds });
     expect(status, JSON.stringify(body)).toBe(200);
     expect(body.levelName).toBe("1-8");
+    expect(body.zombies).toEqual(zombies);
+    // The seeds were picked on the chooser already open, as a player does, so the level played is the one whose
+    // street was shown. Starting it again would pick new waves, and replay the intro up to the chooser first
+    // (about as long again: 450 + 462 ticks instead of 462).
+    expect(body.appTicks - atChooser).toBeLessThan((atChooser - before) * 1.5);
 
     const state = await api.state();
     expect(state.scene).toBe("playing");
@@ -273,6 +288,9 @@ describe("playing levels through the API (launches the game; needs agent/.env)",
       const seeds = asked.body.error.choices.slice(0, asked.body.error.pick);
       const { status, body } = await api.control({ type: "startLevel", level: levelName, seeds });
       expect(status, `${levelName}: ${JSON.stringify(body)}`).toBe(200);
+      expect(body.zombies, levelName).toEqual(asked.body.error.zombies);
+      // The game always shows a ducky tube zombie on the street of a pool level.
+      if (stage === "pool") expect(body.zombies).toContain("ducky_tube_zombie");
       const state = await api.state();
       expect(state.board).toMatchObject({ levelName, stage });
       expect(state.board.seedPackets.map((packet: Json) => packet.plant)).toEqual(seeds);

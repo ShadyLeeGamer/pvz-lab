@@ -14,7 +14,7 @@ import { writeBrief } from "./brief.ts";
 import { describeEvent } from "./claude-events.ts";
 import { GameClient, type GameState } from "./game-client.ts";
 import { launchGame, loadEnv, readGameConfig } from "./game-process.ts";
-import { normalizePlantName } from "./mcp/tools.ts";
+import { normalizePlantName, streetLine } from "./mcp/tools.ts";
 import { loadSession } from "./session.ts";
 
 const SERVER_NAME = "pvz";
@@ -114,6 +114,9 @@ try {
       throw new Error(`level ${level} doesn't let you choose seeds (it gives you ${packets.join(", ") || "none"}), so take "seeds" out of the session file`);
     }
   }
+  // What the level's intro showed on the street, which a player sees before playing.
+  const street = streetLine(started.reply.zombies);
+  if (street) console.log(street);
   console.log(clock === "waits" ? `The game is paused while Claude thinks; each wait plays at ${speed}x.` : `Game time will run at ${speed}x.`);
 
   const mcpConfig = join(runDir, "mcp.json");
@@ -138,7 +141,7 @@ try {
   const args = [
     ...claude.prefix,
     "-p",
-    "Play the level.",
+    street ? `Play the level. ${street}` : "Play the level.",
     "--system-prompt",
     brief,
     "--tools",

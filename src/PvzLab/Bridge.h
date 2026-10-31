@@ -37,6 +37,9 @@ namespace PvzLab
 		NoLevel
 	};
 	IntroWait WhatIntroWaitsFor();
+	// The zombie types a level's intro shows waiting on the street, which is how a player sees what's coming
+	// (CutScene::PlaceStreetZombies). Empty outside the intro.
+	std::vector<std::string> StreetZombies();
 	std::optional<Problem> ChooseSeeds(const std::vector<std::string>& theSeeds);
 	bool PlayStarted();						// the level's first tick of play has run
 	int CurrentLevel();						// the level being played; 0 outside Adventure

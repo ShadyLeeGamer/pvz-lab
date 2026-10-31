@@ -57,6 +57,7 @@ describe("the MCP server in a chat app (starts its own game; needs agent/.env)",
     expect(asked.isError, asked.text).toBe(false);
     expect(asked.text.split("\n")[0]).toBe("Level 1-8 asks you to choose 6 seed packets first.");
     expect(asked.text).toContain("sunflower (50 sun)");
+    expect(asked.text).toMatch(/^The street shows the zombies coming in this level: zombie, .+\.$/m);
     expect(gameUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
 
     const seeds = ["sunflower", "peashooter", "wall_nut", "potato_mine", "cherry_bomb", "snow_pea"];

@@ -250,6 +250,7 @@ namespace PvzLab
 				anError["choices"] = aProblem.mChoices;
 				anError["costs"] = aProblem.mChoiceCosts;
 				anError["pick"] = aProblem.mPick;
+				anError["zombies"] = aProblem.mZombies;
 			}
 			aJson["error"] = anError;
 			return aJson.dump();
@@ -270,6 +271,7 @@ namespace PvzLab
 		{
 			aJson["level"] = *theReply.mLevel;
 			aJson["levelName"] = theReply.mLevelName;
+			aJson["zombies"] = theReply.mZombies;
 		}
 		if (theReply.mClock)
 			aJson["clock"] = ClockJson(*theReply.mClock);

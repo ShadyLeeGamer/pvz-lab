@@ -964,6 +964,27 @@ namespace PvzLab
 		return IntroWait::Nothing;
 	}
 
+	std::vector<std::string> StreetZombies()
+	{
+		std::vector<std::string> aTypes;
+		Board* aBoard = gLawnApp->mBoard;
+		if (aBoard == nullptr)
+			return aTypes;
+
+		std::vector<bool> aShown(ZombieType::NUM_ZOMBIE_TYPES, false);
+		for (Zombie* aZombie : aBoard->mZombies)
+		{
+			if (!aZombie->mDead && aZombie->mFromWave == Zombie::ZOMBIE_WAVE_CUTSCENE && aZombie->mZombieType >= 0 && aZombie->mZombieType < ZombieType::NUM_ZOMBIE_TYPES)
+				aShown[aZombie->mZombieType] = true;
+		}
+		for (int aType = 0; aType < ZombieType::NUM_ZOMBIE_TYPES; aType++)
+		{
+			if (aShown[aType])
+				aTypes.push_back(ZombieName(static_cast<ZombieType>(aType)));
+		}
+		return aTypes;
+	}
+
 	std::optional<Problem> ChooseSeeds(const std::vector<std::string>& theSeeds)
 	{
 		LawnApp* anApp = gLawnApp;
@@ -1010,6 +1031,7 @@ namespace PvzLab
 			aProblem.mChoices = aChoices;
 			aProblem.mChoiceCosts = aCosts;
 			aProblem.mPick = aPick;
+			aProblem.mZombies = StreetZombies();	// on screen next to the seed chooser
 			return aProblem;
 		}
 

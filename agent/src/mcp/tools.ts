@@ -64,11 +64,17 @@ async function look(context: ToolContext): Promise<{ state: GameState; levelName
   return { state: await finishWonLevel(context, first), levelName: first.board?.levelName };
 }
 
+// The zombies a level's intro shows waiting on the street, as a line for the player; empty if there are none.
+export function streetLine(zombies: string[] | undefined): string {
+  return zombies && zombies.length > 0 ? `The street shows the zombies coming in this level: ${zombies.join(", ")}.` : "";
+}
+
 // What start_level says when a level asks which seed packets to bring, like the seed chooser screen.
 function seedChoice(level: string, error: ApiError, triedSeeds: boolean): string {
   const choices = (error.choices ?? []).map((plant, i) => (error.costs?.[i] === undefined ? plant : `${plant} (${error.costs[i]} sun)`));
   const why = triedSeeds ? `Level ${level} didn't start: ${error.message}.` : `Level ${level} asks you to choose ${error.pick} seed packets first.`;
-  return `${why}\nYou can choose from: ${choices.join(", ")}.\nCall start_level again with the ${error.pick} you pick.`;
+  const street = streetLine(error.zombies);
+  return `${why}\n${street ? `${street}\n` : ""}You can choose from: ${choices.join(", ")}.\nCall start_level again with the ${error.pick} you pick.`;
 }
 
 // Runs a tool, logs the call, and turns anything unexpected into an error Claude can read.
@@ -128,7 +134,8 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
             if (!running.ok) return reply(`Level ${input.level} started, but time didn't start: ${running.error.message}.`, true);
           }
           const how = context.clock === "waits" ? "The game is paused while you think." : "The game is running.";
-          return reply(`Level ${input.level} started. ${how}\n\n${summarize(await game.state(), summary)}`);
+          const street = streetLine(result.reply.zombies);
+          return reply(`Level ${input.level} started. ${how}\n${street ? `${street}\n` : ""}\n${summarize(await game.state(), summary)}`);
         }),
     );
   }
