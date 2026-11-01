@@ -110,7 +110,7 @@ TEST_CASE("bodies that aren't a request object are refused")
 	CHECK(ParseBadAction("not json").mMessage == "the body isn't valid JSON");
 	CHECK(ParseBadAction("[1, 2]").mMessage == "the body must be a JSON object");
 	CHECK(ParseBadAction(R"({"slot":1})").mMessage == "\"type\" is missing");
-	CHECK(ParseBadAction(R"({"type":"plant"})").mMessage == "unknown action \"plant\"; expected placePlant, digUp, collectSun or collectAward");
+	CHECK(ParseBadAction(R"({"type":"plant"})").mMessage == "unknown action \"plant\"; expected placePlant, digUp, collectSun, collectAward or sendZombie");
 	CHECK(ParseBadControl(R"({"type":"placePlant","slot":0,"col":0,"row":0})").mCode == ProblemCode::BadRequest);
 }
 
@@ -183,6 +183,40 @@ TEST_CASE("chooseSeeds takes the seeds and what to do once play starts, and noth
 	CHECK(ParseBadControl(R"({"type":"chooseSeeds"})").mMessage == "\"seeds\" is missing");
 	CHECK(ParseBadControl(R"({"type":"chooseSeeds","seeds":["chomper","chomper"]})").mMessage == "\"chomper\" is in \"seeds\" twice");
 	CHECK(ParseBadControl(R"({"type":"chooseSeeds","seeds":["chomper"],"level":9})").mMessage == "unknown field \"level\"");
+}
+
+TEST_CASE("sendZombie names a zombie and a row; only a bungee names the column it drops onto")
+{
+	Action anAction = ParseGoodAction(R"({"type":"sendZombie","zombie":"conehead_zombie","row":2})");
+	REQUIRE(std::holds_alternative<SendZombie>(anAction));
+	const SendZombie& aSend = std::get<SendZombie>(anAction);
+	CHECK(aSend.mZombie == "conehead_zombie");
+	CHECK(aSend.mRow == 2);
+	CHECK_FALSE(aSend.mCol);
+	CHECK(std::get<SendZombie>(ParseGoodAction(R"({"type":"sendZombie","zombie":"bungee_zombie","row":1,"col":4})")).mCol == 4);
+
+	CHECK(ParseBadAction(R"({"type":"sendZombie","zombie":"bungee_zombie","row":1})").mMessage == "a bungee_zombie needs \"col\": the column it drops onto");
+	CHECK(ParseBadAction(R"({"type":"sendZombie","zombie":"zombie","row":1,"col":4})").mMessage == "\"col\" is only for bungee_zombie; other zombies walk in from the right");
+	CHECK(ParseBadAction(R"({"type":"sendZombie","row":1})").mMessage == "\"zombie\" must be a zombie's name, such as \"conehead_zombie\"");
+	CHECK(ParseBadAction(R"({"type":"sendZombie","zombie":"zombie","row":6})").mMessage == "\"row\" must be 0 to 5");
+	CHECK(ParseBadAction(R"({"type":"sendZombie","zombie":"zombie","row":1,"speed":2})").mMessage == "unknown field \"speed\"");
+}
+
+TEST_CASE("a refused send names its reason")
+{
+	Problem aProblem = CantSendZombie(SendReason::BungeeTarget, "the words");
+	CHECK(aProblem.mCode == ProblemCode::CantSendZombie);
+	CHECK(aProblem.mReason == "bungee_target");
+	CHECK(aProblem.mMessage == "the words");
+	CHECK(CantSendZombie(SendReason::NotInLevel, "x").mReason == "not_in_level");
+	CHECK(CantSendZombie(SendReason::TooFewPoints, "x").mReason == "too_few_points");
+	CHECK(CantSendZombie(SendReason::TooEarly, "x").mReason == "too_early");
+	CHECK(CantSendZombie(SendReason::Row, "x").mReason == "row");
+	CHECK(CantSendZombie(SendReason::TooManyZombies, "x").mReason == "too_many_zombies");
+	CHECK(HttpStatus(ProblemCode::CantSendZombie) == 409);
+	CHECK(HttpStatus(ProblemCode::NotVersus) == 409);
+	CHECK(std::string(ProblemName(ProblemCode::NotVersus)) == "not_versus");
+	CHECK(std::string(ProblemName(ProblemCode::CantSendZombie)) == "cant_send_zombie");
 }
 
 TEST_CASE("versus problems come from the game's state, not the request")

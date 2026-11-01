@@ -34,8 +34,35 @@ TEST_CASE("both seats see the zombie side's points and types, and neither sees t
 	REQUIRE(aZombies.mVersus);
 	CHECK(aZombies.mVersus->mPoints == 3);
 	CHECK_FALSE(aZombies.mVersus->mPayTable);
+	CHECK_FALSE(aZombies.mVersus->mSentIds);
+}
+
+TEST_CASE("the zombie seat also sees its own zombies on their way in, its held zombies and its refunds; a player sees none of them")
+{
+	Snapshot aPlayer = PlayerView(MakeVersusSnapshot());
+	REQUIRE(aPlayer.mBoard);
+	REQUIRE(aPlayer.mBoard->mZombies.size() == 2);	// the conehead and the bungee on screen
+	CHECK_FALSE(aPlayer.mBoard->mZombies[1].mTargetCol);
+	CHECK_FALSE(aPlayer.mVersus->mHeld);
+	CHECK_FALSE(aPlayer.mVersus->mRefunds);
+
+	Snapshot aZombies = ZombiesView(MakeVersusSnapshot());
 	REQUIRE(aZombies.mBoard);
-	CHECK(aZombies.mBoard->mZombies.size() == 1);	// the off-screen zombie isn't the zombie seat's own
+	REQUIRE(aZombies.mBoard->mZombies.size() == 3);
+	const ZombieInfo& anOwn = aZombies.mBoard->mZombies[2];
+	CHECK(anOwn.mId == 2002);			// off screen, but the zombie side sent it
+	CHECK_FALSE(anOwn.mOnScreen);
+	CHECK_FALSE(anOwn.mHealth);
+	REQUIRE(anOwn.mHelm);
+	CHECK_FALSE(anOwn.mHelm->mHealth);
+	CHECK_FALSE(aZombies.mBoard->mZombies[1].mTargetCol);
+	REQUIRE(aZombies.mVersus->mHeld);
+	CHECK(aZombies.mVersus->mHeld->at(0).mZombie == "zombie");
+	REQUIRE(aZombies.mVersus->mRefunds);
+	CHECK(aZombies.mVersus->mRefunds->at(0).mReason == "too_many_zombies");
+
+	Snapshot aFull = MakeVersusSnapshot();
+	CHECK(aFull.mBoard->mZombies[2].mTargetCol == 4);
 }
 
 TEST_CASE("the player view hides what a player can't see")

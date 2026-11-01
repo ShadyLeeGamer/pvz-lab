@@ -64,10 +64,24 @@ namespace PvzLab
 	}
 
 	// MakeLevelSnapshot() as a versus level: 3 points to spend on wave 7, with the full view's extras.
+	// The off-screen conehead (2002) is one the zombie side sent, and an aimed bungee (2003) is dropping in.
 	inline Snapshot MakeVersusSnapshot()
 	{
 		Snapshot aSnapshot = MakeLevelSnapshot();
+		ZombieInfo aBungee;
+		aBungee.mId = 2003;
+		aBungee.mType = "bungee_zombie";
+		aBungee.mRow = 1;
+		aBungee.mX = 320.0f;
+		aBungee.mOnScreen = true;
+		aBungee.mHealth = Health{ 450, 450 };
+		aBungee.mTargetCol = 4;
+		aSnapshot.mBoard->mZombies.push_back(aBungee);
+
 		VersusInfo aVersus;
+		aVersus.mHeld = std::vector<HeldZombieInfo>{ { "zombie", 3, std::nullopt } };
+		aVersus.mRefunds = std::vector<RefundInfo>{ { "conehead_zombie", 0, "too_many_zombies" } };
+		aVersus.mSentIds = std::vector<uint32_t>{ 2002, 2003 };
 		aVersus.mPoints = 3;
 		aVersus.mWave = 7;
 		aVersus.mTypes = { { "zombie", 1, 1, true }, { "buckethead_zombie", 4, 1, false } };

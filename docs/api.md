@@ -131,6 +131,7 @@ Zombies that are dying, or not part of the level (menus, cutscenes), are left ou
 | `hasArm`, `hasHead` | The game drops the arm below 2/3 body health and the head below 1/3. |
 | `helm`, `shield` | `null`, or `{ type, damage }` (plus `health` in the full view). Helms: `cone`, `bucket`, `football_helmet`, `miner_hat`, `bobsled_helmet`, ... Shields: `screen_door`, `newspaper`, `ladder`. `damage` works like the plants' field. |
 | `health` | Full view only: the body's `{ current, max }`. |
+| `targetCol` | Full view only, bungees: the column it drops onto (its row is `row`). |
 
 ### `suns[]`
 
@@ -164,13 +165,24 @@ In a versus level the zombie side is played through this API instead of by the l
 | `wavesAtStart` | Full view only: each wave's zombies as the game picked them, read at the first moment of play. |
 | `wavesNow` | Full view only: each wave's zombies now: only flag zombies are left. |
 | `waveHealthStart`, `waveHealthTarget` | Full view only: the game's own values for its early-wave check. A target of `-1` means the next wave waits for its timer. |
+| `held` | The zombie seat's view and the full view: zombies sent during a flag wave's warning, as `{ zombie, row, col? }`. They walk on when the wave arrives. |
+| `refunds` | The zombie seat's view and the full view: held zombies that couldn't walk on when their wave arrived, as `{ zombie, row, reason }`, with `reason` as in `cant_send_zombie`. Their points came back. |
+| `sentIds` | Full view only: the ids of the zombies the zombie side sent. |
+
+How a sent zombie counts for the game's early-wave check:
+- Each zombie the zombie side sends belongs to the wave being paid for, as the game's own zombies do.
+- Once that wave's points are all spent, the game gets the wave's health: what the game counted when the wave arrived (its flag zombie, on a flag wave) plus each sent zombie's health as it walked on.
+- From then on, the game's own rule applies: once the plants have destroyed 35-50% of that health (all of it before a flag wave), the next wave comes about 2 seconds later. Bungees don't count, as in the game, so a wave of only bungees waits for its timer.
+
+The zombie seat's view (`view=zombies`) also shows the zombie side's own zombies that haven't walked on screen yet.
 
 ### What the player view leaves out
 
 - Exact health of plants, zombies and their armour. The `damage` stages and `hasArm`/`hasHead` show what the art shows.
 - `nextWaveIn` and `upcomingWaves`.
 - Zombies that haven't walked on screen yet.
-- `versusPending`, and the full-view-only fields of `versus`.
+- `versusPending`, the full-view-only fields of `versus`, and its `held` and `refunds`.
+- Bungees' `targetCol`.
 
 Not handled yet: zombies hidden by fog (Adventure levels 31–40) and by Stormy Night's darkness still appear in the player view.
 
@@ -191,6 +203,7 @@ One action per request, as `{ "type": ..., ...fields }`.
 | `digUp` | `col`, `row`, `plant` (optional) | Picks up the shovel and clicks a plant on the tile: the two clicks a player makes. No sun comes back. Without `plant`, it digs up what a click on the middle of the tile does: the plant itself, before a pumpkin around it or a lily pad or flower pot under it. `plant` names another plant on the tile, such as `"pumpkin"`. |
 | `collectSun` | `id` (optional) | Clicks the sun with that `id`, or every sun on screen when there's no `id`. |
 | `collectAward` | none | Clicks the level-end award, which finishes the level. |
+| `sendZombie` | `zombie`, `row`, `col` (bungees only) | In a versus level: sends one of the level's zombie types into a row, paid for with the zombie side's points. A `bungee_zombie` drops onto the tile at `col` instead. See [`versus`](#versus). |
 
 Replies (`200`):
 
@@ -208,6 +221,26 @@ Replies (`200`):
 { "error": { "code": "cant_plant_here", "reason": "not_here",
   "message": "sunflower can't go at column 2, row 0: there's already a sunflower there" } }
 ```
+
+`sendZombie` answers with the zombie that walked on and the points left, or, during a flag wave's warning, that it's held until the wave arrives:
+
+```json
+{ "ok": true, "appTicks": 6120, "zombie": { "id": 131072, "type": "conehead_zombie", "row": 2 }, "points": 1 }
+{ "ok": true, "appTicks": 9035, "held": true, "points": 6 }
+```
+
+It checks the versus rules first, then the game's own, and changes nothing when it refuses:
+- **The versus rules:** the zombie must be one of the level's types (`types` in `versus`), allowed in the wave being paid for (its `firstWave`, or the final wave), and affordable.
+- **The game's own rules:**
+  - the row must take that zombie: water rows only take zombies that walk from wave 6, Gargantuars stay out of the top row, and so on;
+  - a bungee can only drop where the game's own bungees can: not on a gravestone, dirt, a grave buster or cob cannon, a tile another bungee is after, or the last sun-making plant no bungee is after.
+
+```json
+{ "error": { "code": "cant_send_zombie", "reason": "too_early",
+  "message": "pole_vaulting_zombie can't come before wave 5, and this is wave 4" } }
+```
+
+`reason` is one of `not_in_level`, `too_few_points`, `too_early`, `row`, `bungee_target` or `too_many_zombies` (the game holds no more). Outside a versus level it's `409 not_versus`. Once the level is decided (the plants' award has dropped, or the zombies have won), it's `409 level_ending`.
 
 `digUp` checks first too. The game only lets a lily pad or flower pot be dug up once nothing sits on it, and never a grave buster:
 
@@ -272,6 +305,7 @@ Every control command takes over the clock, so one still running (a step, a leve
 | 409 | `no_profile`, `needs_input`, `bad_seeds` | A level can't be started (see `startLevel`). |
 | 409 | `not_a_versus_level` | That level can't be played in versus (see `startLevel`). |
 | 409 | `not_at_seed_chooser` | No seed chooser is open (see `chooseSeeds`). |
+| 409 | `not_versus`, `cant_send_zombie` | `sendZombie` outside a versus level, or a zombie that can't be sent; `reason` says why (see `sendZombie`). |
 | 409 | `interrupted` | A newer control command replaced this one. |
 | 500 | `internal` | Something unexpected; the message says what. |
 | 503 | `not_ready`, `busy`, `shutting_down` | The game isn't ready, didn't pick the request up, or is closing. |

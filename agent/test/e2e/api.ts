@@ -1,5 +1,27 @@
 // Small helpers for calling the game's local API from end-to-end tests.
+import { Agent, request } from "node:http";
 import { expect } from "vitest";
+
+// One pool of reused connections. fetch closes every connection itself (it reads the server's 1 s
+// keep-alive hint as "close now"), and each closed connection holds a port for a minute or two, so a
+// test making thousands of calls could run out of ports.
+const agent = new Agent({ keepAlive: true });
+
+function call(url: string, method: "GET" | "POST", body?: string): Promise<{ status: number; contentType: string; text: string }> {
+  return new Promise((resolve, reject) => {
+    const headers = body === undefined ? {} : { "content-type": "application/json", "content-length": Buffer.byteLength(body) };
+    const req = request(url, { method, agent, headers }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk: string) => (text += chunk));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, contentType: String(res.headers["content-type"] ?? ""), text }));
+      res.on("error", reject);
+    });
+    req.on("error", reject);
+    if (body !== undefined) req.write(body);
+    req.end();
+  });
+}
 
 // Untyped on purpose: these tests check the JSON the game actually sends, field by field.
 export type Json = any;
@@ -17,19 +39,15 @@ export class GameApi {
   }
 
   async get(path: string): Promise<ApiResponse> {
-    const response = await fetch(`${this.baseUrl}${path}`);
-    expect(response.headers.get("content-type")).toContain("application/json");
-    return { status: response.status, body: await response.json() };
+    const response = await call(`${this.baseUrl}${path}`, "GET");
+    expect(response.contentType).toContain("application/json");
+    return { status: response.status, body: JSON.parse(response.text) };
   }
 
   async post(path: string, body: unknown): Promise<ApiResponse> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: typeof body === "string" ? body : JSON.stringify(body),
-    });
-    expect(response.headers.get("content-type")).toContain("application/json");
-    return { status: response.status, body: await response.json() };
+    const response = await call(`${this.baseUrl}${path}`, "POST", typeof body === "string" ? body : JSON.stringify(body));
+    expect(response.contentType).toContain("application/json");
+    return { status: response.status, body: JSON.parse(response.text) };
   }
 
   async state(view: "player" | "zombies" | "full" = "player"): Promise<Json> {

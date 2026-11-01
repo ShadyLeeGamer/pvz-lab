@@ -77,7 +77,51 @@ TEST_CASE("a versus level's JSON shows the zombie side's points and types; the f
 
 	json aZombies = json::parse(SnapshotToJson(ZombiesView(MakeVersusSnapshot())));
 	CHECK(aZombies.at("view") == "zombies");
-	CHECK(aZombies.at("versus") == aShared);
+	CHECK(aZombies.at("versus").at("points") == aShared.at("points"));
+	CHECK(aZombies.at("versus").at("types") == aShared.at("types"));
+}
+
+TEST_CASE("only the zombie seat's JSON lists its held zombies and refunds; only the full view the ids it sent and a bungee's target")
+{
+	json aZombies = json::parse(SnapshotToJson(ZombiesView(MakeVersusSnapshot())));
+	CHECK(aZombies.at("versus").at("held") == json::array({ json{ { "zombie", "zombie" }, { "row", 3 } } }));
+	CHECK(aZombies.at("versus").at("refunds") == json::array({ json{ { "zombie", "conehead_zombie" }, { "row", 0 }, { "reason", "too_many_zombies" } } }));
+	CHECK_FALSE(aZombies.at("versus").contains("sentIds"));
+
+	json aPlayer = json::parse(SnapshotToJson(PlayerView(MakeVersusSnapshot())));
+	CHECK_FALSE(aPlayer.at("versus").contains("held"));
+	CHECK_FALSE(aPlayer.at("versus").contains("refunds"));
+	CHECK_FALSE(aPlayer.at("board").at("zombies").at(1).contains("targetCol"));
+
+	json aFull = json::parse(SnapshotToJson(MakeVersusSnapshot()));
+	CHECK(aFull.at("versus").at("sentIds") == json::array({ 2002, 2003 }));
+	CHECK(aFull.at("board").at("zombies").at(2).at("targetCol") == 4);
+}
+
+TEST_CASE("a sendZombie reply names the zombie and the points left, or says it's held")
+{
+	Reply aSent;
+	aSent.mSentZombie = ZombieRef{ 4242, "conehead_zombie", 2 };
+	aSent.mPoints = 1;
+	json aJson = json::parse(ReplyToJson(aSent));
+	CHECK(aJson.at("ok") == true);
+	CHECK(aJson.at("zombie") == json{ { "id", 4242 }, { "type", "conehead_zombie" }, { "row", 2 } });
+	CHECK(aJson.at("points") == 1);
+	CHECK_FALSE(aJson.contains("held"));
+
+	Reply aHeld;
+	aHeld.mHeld = true;
+	aHeld.mPoints = 5;
+	json aHeldJson = json::parse(ReplyToJson(aHeld));
+	CHECK(aHeldJson.at("held") == true);
+	CHECK(aHeldJson.at("points") == 5);
+	CHECK_FALSE(aHeldJson.contains("zombie"));
+
+	Reply aRefused;
+	aRefused.mProblem = CantSendZombie(SendReason::TooEarly, "pole_vaulting_zombie can't come before wave 5, and this is wave 4");
+	json anError = json::parse(ReplyToJson(aRefused)).at("error");
+	CHECK(anError.at("code") == "cant_send_zombie");
+	CHECK(anError.at("reason") == "too_early");
 }
 
 TEST_CASE("without versus, the JSON has no versus field")

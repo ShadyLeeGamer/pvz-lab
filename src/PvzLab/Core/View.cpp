@@ -1,4 +1,5 @@
 #include "View.h"
+#include <algorithm>
 
 namespace PvzLab
 {
@@ -12,6 +13,19 @@ namespace PvzLab
 		return Damage::None;
 	}
 
+	namespace
+	{
+		void HideHealth(ZombieInfo& theZombie)
+		{
+			theZombie.mHealth.reset();
+			if (theZombie.mHelm)
+				theZombie.mHelm->mHealth.reset();
+			if (theZombie.mShield)
+				theZombie.mShield->mHealth.reset();
+			theZombie.mTargetCol.reset();
+		}
+	}
+
 	Snapshot PlayerView(const Snapshot& theFull)
 	{
 		Snapshot aView = theFull;
@@ -19,6 +33,9 @@ namespace PvzLab
 		aView.mVersusPending.reset();
 		if (aView.mVersus)
 		{
+			aView.mVersus->mHeld.reset();
+			aView.mVersus->mRefunds.reset();
+			aView.mVersus->mSentIds.reset();
 			aView.mVersus->mPayTable.reset();
 			aView.mVersus->mWavesAtStart.reset();
 			aView.mVersus->mWavesNow.reset();
@@ -34,13 +51,7 @@ namespace PvzLab
 
 		std::erase_if(aBoard.mZombies, [](const ZombieInfo& theZombie) { return !theZombie.mOnScreen; });
 		for (ZombieInfo& aZombie : aBoard.mZombies)
-		{
-			aZombie.mHealth.reset();
-			if (aZombie.mHelm)
-				aZombie.mHelm->mHealth.reset();
-			if (aZombie.mShield)
-				aZombie.mShield->mHealth.reset();
-		}
+			HideHealth(aZombie);
 
 		aBoard.mProgress.mNextWaveIn.reset();
 		aBoard.mProgress.mUpcomingWaves.reset();
@@ -51,6 +62,25 @@ namespace PvzLab
 	{
 		Snapshot aView = PlayerView(theFull);
 		aView.mZombiesView = true;
+		if (!theFull.mVersus || !aView.mVersus)
+			return aView;
+
+		// What the zombie seat knows because it sent them: its held zombies, its refunds, and its own
+		// zombies that haven't walked on screen yet.
+		aView.mVersus->mHeld = theFull.mVersus->mHeld;
+		aView.mVersus->mRefunds = theFull.mVersus->mRefunds;
+		if (theFull.mBoard && aView.mBoard && theFull.mVersus->mSentIds)
+		{
+			const std::vector<uint32_t>& aSent = *theFull.mVersus->mSentIds;
+			for (const ZombieInfo& aZombie : theFull.mBoard->mZombies)
+			{
+				if (aZombie.mOnScreen || std::ranges::find(aSent, aZombie.mId) == aSent.end())
+					continue;
+				ZombieInfo anOwn = aZombie;
+				HideHealth(anOwn);
+				aView.mBoard->mZombies.push_back(std::move(anOwn));
+			}
+		}
 		return aView;
 	}
 }

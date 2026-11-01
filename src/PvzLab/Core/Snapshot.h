@@ -89,6 +89,7 @@ namespace PvzLab
 		std::optional<ArmorInfo>		mHelm;
 		std::optional<ArmorInfo>		mShield;
 		std::optional<Health>			mHealth;				// the body; full view only
+		std::optional<int>				mTargetCol;				// a bungee's target column; full view only
 	};
 
 	struct SunInfo
@@ -169,18 +170,38 @@ namespace PvzLab
 		bool							mReady = false;			// allowed in the wave being paid for, and affordable with the points left
 	};
 
+	// A zombie the zombie side sent during a flag wave's warning: it walks on when the wave arrives.
+	struct HeldZombieInfo
+	{
+		std::string						mZombie;
+		int								mRow = 0;
+		std::optional<int>				mCol;					// a bungee's target column
+	};
+
+	// A held zombie that couldn't walk on when its wave arrived. Its points came back.
+	struct RefundInfo
+	{
+		std::string						mZombie;
+		int								mRow = 0;
+		std::string						mReason;				// as in cant_send_zombie, e.g. "row" or "too_many_zombies"
+	};
+
 	// The zombie side of a versus match. Only while a versus level is in play.
 	struct VersusInfo
 	{
 		int								mPoints = 0;			// left to spend on the wave being paid for
 		int								mWave = 0;				// the wave being paid for, counting from 1; 0 before the first payday
 		std::vector<VersusZombieType>	mTypes;
+		// The zombie seat's view and the full view only:
+		std::optional<std::vector<HeldZombieInfo>> mHeld;
+		std::optional<std::vector<RefundInfo>> mRefunds;
 		// Full view only, for tests:
 		std::optional<std::vector<int>>	mPayTable;
 		std::optional<std::vector<std::vector<std::string>>> mWavesAtStart;	// what the game picked, read at the first tick of play
 		std::optional<std::vector<std::vector<std::string>>> mWavesNow;		// every wave's list as it is now
 		std::optional<int>				mWaveHealthStart;		// Board::mZombieHealthWaveStart
 		std::optional<int>				mWaveHealthTarget;		// Board::mZombieHealthToNextWave; -1: the next wave waits for its timer
+		std::optional<std::vector<uint32_t>> mSentIds;			// the zombies the zombie side sent; the zombie seat's view uses them
 	};
 
 	// The time dial (see Clock.h).

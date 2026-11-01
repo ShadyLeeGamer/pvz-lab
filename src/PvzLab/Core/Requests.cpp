@@ -43,6 +43,8 @@ namespace PvzLab
 			case ProblemCode::BadSeeds:			return { "bad_seeds", 409, "this level needs its seeds chosen" };
 			case ProblemCode::NotAtSeedChooser:	return { "not_at_seed_chooser", 409, "no seed chooser is open right now" };
 			case ProblemCode::NotAVersusLevel:	return { "not_a_versus_level", 409, "this level can't be played in versus" };
+			case ProblemCode::NotVersus:		return { "not_versus", 409, "this level isn't being played in versus" };
+			case ProblemCode::CantSendZombie:	return { "cant_send_zombie", 409, "that zombie can't be sent" };
 			case ProblemCode::Interrupted:		return { "interrupted", 409, "another control command replaced this one" };
 			case ProblemCode::Busy:				return { "busy", 503, "the game didn't pick the request up within 2 seconds (it may still be loading, or a dialog such as the Almanac or the Store may be open)" };
 			case ProblemCode::ShuttingDown:		return { "shutting_down", 503, "the game is closing" };
@@ -295,7 +297,29 @@ namespace PvzLab
 			aDig.mRow = static_cast<int>(*aRow);
 			return aDig;
 		}
-		return Bad(std::format("unknown action \"{}\"; expected placePlant, digUp, collectSun or collectAward", aType));
+		if (aType == "sendZombie")
+		{
+			aFields.Allow({ "zombie", "row", "col" });
+			SendZombie aSend;
+			if (auto aZombie = aJson.find("zombie"); aZombie != aJson.end() && aZombie->is_string() && !aZombie->get<std::string>().empty())
+				aSend.mZombie = aZombie->get<std::string>();
+			else
+				aFields.Fail("\"zombie\" must be a zombie's name, such as \"conehead_zombie\"");
+			std::optional<int64_t> aRow = aFields.Number("row", 0, 5, true);
+			std::optional<int64_t> aCol = aFields.Number("col", 0, 8, false);
+			if (aFields.Error())
+				return *aFields.Error();
+			aSend.mRow = static_cast<int>(*aRow);
+			if (aCol)
+				aSend.mCol = static_cast<int>(*aCol);
+			// Only a bungee drops onto a tile; every other zombie walks in from the right.
+			if (aSend.mZombie == kBungeeZombie && !aSend.mCol)
+				return Bad("a bungee_zombie needs \"col\": the column it drops onto");
+			if (aSend.mZombie != kBungeeZombie && aSend.mCol)
+				return Bad("\"col\" is only for bungee_zombie; other zombies walk in from the right");
+			return aSend;
+		}
+		return Bad(std::format("unknown action \"{}\"; expected placePlant, digUp, collectSun, collectAward or sendZombie", aType));
 	}
 
 	std::variant<Control, Problem> ParseControl(std::string_view theBody)
@@ -400,6 +424,23 @@ namespace PvzLab
 		else if (theReason == PacketReason::NoBasePlant)
 			aReason = "no_base_plant";
 		Problem aProblem = MakeProblem(ProblemCode::NotReady, std::move(theMessage));
+		aProblem.mReason = aReason;
+		return aProblem;
+	}
+
+	Problem CantSendZombie(SendReason theReason, std::string theMessage)
+	{
+		const char* aReason = "not_in_level";
+		switch (theReason)
+		{
+		case SendReason::TooFewPoints:		aReason = "too_few_points"; break;
+		case SendReason::TooEarly:			aReason = "too_early"; break;
+		case SendReason::Row:				aReason = "row"; break;
+		case SendReason::BungeeTarget:		aReason = "bungee_target"; break;
+		case SendReason::TooManyZombies:	aReason = "too_many_zombies"; break;
+		default:							break;
+		}
+		Problem aProblem = MakeProblem(ProblemCode::CantSendZombie, std::move(theMessage));
 		aProblem.mReason = aReason;
 		return aProblem;
 	}

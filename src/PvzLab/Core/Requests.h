@@ -40,7 +40,17 @@ namespace PvzLab
 		std::string						mPlant;					// which plant on the tile, by name; empty: the main plant
 	};
 
-	using Action = std::variant<PlacePlant, CollectSun, CollectAward, DigUp>;
+	inline constexpr const char* kBungeeZombie = "bungee_zombie";
+
+	// The zombie side of a versus level sends a zombie into a row. A bungee drops onto one tile instead.
+	struct SendZombie
+	{
+		std::string						mZombie;				// the game's name, e.g. "conehead_zombie"
+		int								mRow = 0;
+		std::optional<int>				mCol;					// bungee_zombie only: the column it drops onto
+	};
+
+	using Action = std::variant<PlacePlant, CollectSun, CollectAward, DigUp, SendZombie>;
 
 	// Control: the time dial, and starting levels.
 	struct Freeze
@@ -79,7 +89,7 @@ namespace PvzLab
 	enum class ProblemCode
 	{
 		BadRequest,			// 400: the request itself is malformed
-		NotPlaying,			// 409, down to NotAVersusLevel: the game can't do it right now
+		NotPlaying,			// 409, down to CantSendZombie: the game can't do it right now
 		Paused,
 		DialogOpen,
 		LevelEnding,
@@ -96,6 +106,8 @@ namespace PvzLab
 		BadSeeds,
 		NotAtSeedChooser,
 		NotAVersusLevel,
+		NotVersus,
+		CantSendZombie,
 		Interrupted,		// 409: another control command replaced this one
 		Busy,				// 503: the game didn't pick the request up
 		ShuttingDown,		// 503
@@ -124,12 +136,23 @@ namespace PvzLab
 		int								mRow = 0;
 	};
 
+	// A zombie sendZombie sent.
+	struct ZombieRef
+	{
+		uint32_t						mId = 0;
+		std::string						mType;
+		int								mRow = 0;
+	};
+
 	// The game's answer: either mProblem is set, or the request was carried out.
 	struct Reply
 	{
 		std::optional<Problem>			mProblem;
 		uint32_t						mAppTicks = 0;			// when it was carried out or refused
 		std::optional<PlantRef>			mPlant;					// placePlant: the new plant; digUp: the plant dug up
+		std::optional<ZombieRef>		mSentZombie;			// sendZombie: the zombie that walked on
+		bool							mHeld = false;			// sendZombie: held until its flag wave arrives
+		std::optional<int>				mPoints;				// sendZombie: points left
 		std::optional<int>				mSunsCollected;			// collectSun
 		std::optional<int>				mSunValue;				// collectSun
 		std::optional<int>				mLevel;					// startLevel
@@ -164,6 +187,17 @@ namespace PvzLab
 		NoBasePlant
 	};
 
+	// Why a zombie can't be sent.
+	enum class SendReason
+	{
+		NotInLevel,
+		TooFewPoints,
+		TooEarly,
+		Row,
+		BungeeTarget,
+		TooManyZombies
+	};
+
 	std::variant<Action, Problem>		ParseAction(std::string_view theBody);
 	std::variant<Control, Problem>		ParseControl(std::string_view theBody);
 
@@ -173,6 +207,7 @@ namespace PvzLab
 	Problem								MakeProblem(ProblemCode theCode, std::string theMessage = {});
 	Problem								CantPlantHere(PlacementReason theReason, std::string theMessage);
 	Problem								NotReady(PacketReason theReason, std::string theMessage);
+	Problem								CantSendZombie(SendReason theReason, std::string theMessage);
 	const char*							ProblemName(ProblemCode theCode);			// e.g. "cant_plant_here"
 	int									HttpStatus(ProblemCode theCode);
 }

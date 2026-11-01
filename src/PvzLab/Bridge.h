@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace PvzLab
@@ -23,6 +24,19 @@ namespace PvzLab
 	Reply Apply(const CollectSun& theAction);
 	Reply Apply(const CollectAward& theAction);
 	Reply Apply(const DigUp& theAction);
+
+	// Sending a zombie for the zombie side of a versus level. The versus rules (Core/Versus.h) come first;
+	// these are the game's own. theWave is the wave being paid for, from 0.
+	// Refuses a send when no level is in play, the game is paused, a dialog is open, or the level is decided.
+	std::optional<Problem> CheckCanSend();
+	// The game's rules for where a zombie may go: its row, and where a bungee may drop.
+	std::optional<Problem> CheckZombiePlace(const std::string& theZombie, int theRow, std::optional<int> theCol, int theWave);
+	struct SpawnedZombie
+	{
+		uint32_t						mId = 0;
+		int								mHealth = 0;			// what it added to its wave as the game counts it
+	};
+	std::variant<SpawnedZombie, Problem> SpawnZombie(const std::string& theZombie, int theRow, std::optional<int> theCol, int theWave);
 
 	// Starting a level.
 	bool GameLoaded();
@@ -66,6 +80,9 @@ namespace PvzLab
 	// The game's own "timer only" value (Board::mZombieHealthToNextWave = -1, as before its first wave),
 	// so the next wave waits for its timer instead of the game's kill-fast shortcut.
 	void SetWaveTimerOnly();
+	int WaveHealthStart();					// Board::mZombieHealthWaveStart, as the game set it when the wave arrived
+	float WaveTargetFraction();				// the game's own random share for its early-wave target
+	void SetWaveShortcut(int theWaveStart, int theTarget);	// hands the game a wave for its early-wave check
 	// The full view's versus extras: every wave's list as it is now, and the two shortcut values.
 	void CaptureVersusWaves(VersusInfo& theInfo);
 

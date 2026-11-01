@@ -8,6 +8,7 @@
 #include <charconv>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -78,8 +79,37 @@ namespace PvzLab
 				gVersusMark = CurrentBoard();
 		}
 
+		// Hands the game the zombie side's wave for its early-wave check once the wave's points are spent.
+		// Until then the next wave waits for its timer: an emptied wave has no health, so the game's
+		// kill-fast shortcut would otherwise bring the next one about 6 s after it.
+		void SetEarlyWaveCheck()
+		{
+			int aTarget = gVersus->PaydaySpent() ? gVersus->WaveTarget(WaveTargetFraction()) : -1;
+			if (aTarget < 0)
+				SetWaveTimerOnly();
+			else
+				SetWaveShortcut(gVersus->WaveHealth(), aTarget);
+		}
+
+		// A wave arrived: count its health as the game does, walk on the zombies held for it, then set the
+		// game's early-wave check. The final wave has no next one.
+		void WaveArrived(int theWave)
+		{
+			gVersus->StartWaveHealth(WaveHealthStart());
+			for (const HeldZombieInfo& aHeld : gVersus->TakeHeld())
+			{
+				std::variant<SpawnedZombie, Problem> aSpawned = SpawnZombie(aHeld.mZombie, aHeld.mRow, aHeld.mCol, theWave);
+				if (const SpawnedZombie* aZombie = std::get_if<SpawnedZombie>(&aSpawned))
+					gVersus->WalkedOn(aZombie->mId, aZombie->mHealth);
+				else
+					gVersus->Refund(aHeld, std::get<Problem>(aSpawned).mReason);
+			}
+			if (!gVersus->IsFinalWave(theWave))
+				SetEarlyWaveCheck();
+		}
+
 		// After every tick: switches a marked level to versus at its first tick of play, then pays the
-		// zombie side and keeps each next wave on its timer.
+		// zombie side as each wave comes.
 		void UpdateVersus()
 		{
 			if (!gVersusMark)
@@ -102,11 +132,8 @@ namespace PvzLab
 			}
 
 			WaveCounter aWaves = ReadWaveCounter();
-			std::optional<int> anArrived = gVersus->AfterTick(aWaves.mSent, aWaves.mHugeWaveWarning);
-			// An emptied wave has no health, so the game's kill-fast shortcut would bring the next one about
-			// 6 s later. The final wave has no next one.
-			if (anArrived && !gVersus->IsFinalWave(*anArrived))
-				SetWaveTimerOnly();
+			if (std::optional<int> anArrived = gVersus->AfterTick(aWaves.mSent, aWaves.mHugeWaveWarning))
+				WaveArrived(*anArrived);
 		}
 
 		void Answer(PendingRequest& theRequest, Reply theReply)
@@ -137,6 +164,42 @@ namespace PvzLab
 			gLong.reset();
 		}
 
+		// sendZombie: the versus rules first (Core/Versus), then the game's own (the Bridge). During a flag
+		// wave's warning the zombie is held, and walks on with the wave.
+		Reply ApplySendZombie(const SendZombie& theSend)
+		{
+			if (!gVersus)
+				return Refused(MakeProblem(ProblemCode::NotVersus));
+			if (std::optional<Problem> aProblem = CheckCanSend())
+				return Refused(*aProblem);
+			if (std::optional<Problem> aProblem = gVersus->CheckSend(theSend.mZombie))
+				return Refused(*aProblem);
+			const int aWave = *gVersus->PaydayWave();
+
+			Reply aReply;
+			if (gVersus->Holding())
+			{
+				if (std::optional<Problem> aProblem = CheckZombiePlace(theSend.mZombie, theSend.mRow, theSend.mCol, aWave))
+					return Refused(*aProblem);
+				gVersus->Hold(HeldZombieInfo{ theSend.mZombie, theSend.mRow, theSend.mCol });
+				aReply.mHeld = true;
+			}
+			else
+			{
+				std::variant<SpawnedZombie, Problem> aSpawned = SpawnZombie(theSend.mZombie, theSend.mRow, theSend.mCol, aWave);
+				if (const Problem* aProblem = std::get_if<Problem>(&aSpawned))
+					return Refused(*aProblem);
+				const SpawnedZombie& aZombie = std::get<SpawnedZombie>(aSpawned);
+				gVersus->Spend(theSend.mZombie);
+				gVersus->WalkedOn(aZombie.mId, aZombie.mHealth);
+				aReply.mSentZombie = ZombieRef{ aZombie.mId, theSend.mZombie, theSend.mRow };
+				if (gVersus->PaydaySpent() && !gVersus->IsFinalWave(aWave))
+					SetEarlyWaveCheck();
+			}
+			aReply.mPoints = gVersus->Points();
+			return aReply;
+		}
+
 		void HandleRequests()
 		{
 			std::vector<std::shared_ptr<PendingRequest>> aRequests = gMailbox->TakeQueued();
@@ -148,7 +211,14 @@ namespace PvzLab
 			{
 				if (const Action* anAction = std::get_if<Action>(&aPending->mRequest))
 				{
-					aReplies.emplace_back(aPending, std::visit([](const auto& theAction) { return Apply(theAction); }, *anAction));
+					// sendZombie needs the versus rules PvzLab keeps; every other action goes straight to the Bridge.
+					aReplies.emplace_back(aPending, std::visit([](const auto& theAction) -> Reply
+					{
+						if constexpr (std::is_same_v<std::decay_t<decltype(theAction)>, SendZombie>)
+							return ApplySendZombie(theAction);
+						else
+							return Apply(theAction);
+					}, *anAction));
 					continue;
 				}
 

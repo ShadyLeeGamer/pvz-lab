@@ -132,6 +132,8 @@ namespace PvzLab
 			aJson["shield"] = theZombie.mShield ? ArmorJson(*theZombie.mShield) : Json(nullptr);
 			if (theZombie.mHealth)
 				aJson["health"] = HealthJson(*theZombie.mHealth);
+			if (theZombie.mTargetCol)
+				aJson["targetCol"] = *theZombie.mTargetCol;
 			return aJson;
 		}
 
@@ -208,6 +210,27 @@ namespace PvzLab
 			aJson["points"] = theVersus.mPoints;
 			aJson["wave"] = theVersus.mWave;
 			aJson["types"] = aTypes;
+			if (theVersus.mHeld)
+			{
+				Json aHeld = Json::array();
+				for (const HeldZombieInfo& aZombie : *theVersus.mHeld)
+				{
+					Json anItem{ { "zombie", aZombie.mZombie }, { "row", aZombie.mRow } };
+					if (aZombie.mCol)
+						anItem["col"] = *aZombie.mCol;
+					aHeld.push_back(anItem);
+				}
+				aJson["held"] = aHeld;
+			}
+			if (theVersus.mRefunds)
+			{
+				Json aRefunds = Json::array();
+				for (const RefundInfo& aRefund : *theVersus.mRefunds)
+					aRefunds.push_back(Json{ { "zombie", aRefund.mZombie }, { "row", aRefund.mRow }, { "reason", aRefund.mReason } });
+				aJson["refunds"] = aRefunds;
+			}
+			if (theVersus.mSentIds)
+				aJson["sentIds"] = *theVersus.mSentIds;
 			if (theVersus.mPayTable)
 				aJson["payTable"] = *theVersus.mPayTable;
 			if (theVersus.mWavesAtStart)
@@ -297,6 +320,15 @@ namespace PvzLab
 			const PlantRef& aPlant = *theReply.mPlant;
 			aJson["plant"] = Json{ { "id", aPlant.mId }, { "type", aPlant.mType }, { "col", aPlant.mCol }, { "row", aPlant.mRow } };
 		}
+		if (theReply.mSentZombie)
+		{
+			const ZombieRef& aZombie = *theReply.mSentZombie;
+			aJson["zombie"] = Json{ { "id", aZombie.mId }, { "type", aZombie.mType }, { "row", aZombie.mRow } };
+		}
+		if (theReply.mHeld)
+			aJson["held"] = true;
+		if (theReply.mPoints)
+			aJson["points"] = *theReply.mPoints;
 		if (theReply.mSunsCollected)
 			aJson["collected"] = *theReply.mSunsCollected;
 		if (theReply.mSunValue)

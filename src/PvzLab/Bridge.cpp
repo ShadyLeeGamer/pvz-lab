@@ -373,6 +373,8 @@ namespace PvzLab
 						Health{ aZombie->mShieldHealth, aZombie->mShieldMaxHealth } };
 				}
 				aInfo.mHealth = Health{ aZombie->mBodyHealth, aZombie->mBodyMaxHealth };
+				if (aZombie->mZombieType == ZombieType::ZOMBIE_BUNGEE)
+					aInfo.mTargetCol = aZombie->mTargetCol;
 				theInfo.mZombies.push_back(std::move(aInfo));
 			}
 		}
@@ -903,6 +905,105 @@ namespace PvzLab
 		return aReply;
 	}
 
+	namespace
+	{
+		std::optional<ZombieType> ZombieTypeNamed(const std::string& theName)
+		{
+			for (int aType = 0; aType < ZombieType::NUM_ZOMBIE_TYPES; aType++)
+			{
+				if (ZombieName(static_cast<ZombieType>(aType)) == theName)
+					return static_cast<ZombieType>(aType);
+			}
+			return std::nullopt;
+		}
+
+		// A copy of Zombie::CountBungeesTargetingSunFlowers, which needs a zombie to ask.
+		int BungeesTargetingSunMakers(Board* theBoard)
+		{
+			int aCount = 0;
+			for (Zombie* aZombie : theBoard->mZombies)
+			{
+				if (aZombie->mDead || aZombie->IsDeadOrDying() || aZombie->mZombieType != ZombieType::ZOMBIE_BUNGEE || aZombie->mTargetCol == -1)
+					continue;
+				Plant* aPlant = theBoard->GetTopPlantAt(aZombie->mTargetCol, aZombie->mRow, PlantPriority::TOPPLANT_BUNGEE_ORDER);
+				if (aPlant && aPlant->MakesSun())
+					aCount++;
+			}
+			return aCount;
+		}
+
+		// A copy of the tiles Zombie::PickBungeeZombieTarget never picks, so an aimed bungee keeps the game's rules.
+		std::optional<std::string> BungeeCantTake(Board* theBoard, int theCol, int theRow)
+		{
+			if (theBoard->GetGraveStoneAt(theCol, theRow) || theBoard->mGridSquareType[theCol][theRow] == GridSquareType::GRIDSQUARE_DIRT)
+				return std::string("a bungee can't drop onto a gravestone or dirt");
+			if (Plant* aPlant = theBoard->GetTopPlantAt(theCol, theRow, PlantPriority::TOPPLANT_BUNGEE_ORDER))
+			{
+				if (aPlant->mSeedType == SeedType::SEED_GRAVEBUSTER || aPlant->mSeedType == SeedType::SEED_COBCANNON)
+					return std::format("a bungee can't take {}", WithArticle(PlantName(aPlant->mSeedType)));
+				if (aPlant->MakesSun() && BungeesTargetingSunMakers(theBoard) == theBoard->CountSunFlowers() - 1)
+					return std::string("a bungee can't take the last sun-making plant that no bungee is after");
+			}
+			if (theBoard->BungeeIsTargetingCell(theCol, theRow))
+				return std::string("another bungee is already dropping onto that tile");
+			return std::nullopt;
+		}
+	}
+
+	std::optional<Problem> CheckCanSend()
+	{
+		LawnApp* anApp = gLawnApp;
+		Board* aBoard = anApp->mBoard;
+		// Decided: the plants' award has dropped (and the game has cleared the lawn), or the zombies have won.
+		if (aBoard != nullptr && (anApp->mGameScene == GameScenes::SCENE_ZOMBIES_WON || aBoard->HasLevelAwardDropped()))
+			return MakeProblem(ProblemCode::LevelEnding, "the level is over");
+		return CheckCanAct(anApp, aBoard);
+	}
+
+	std::optional<Problem> CheckZombiePlace(const std::string& theZombie, int theRow, std::optional<int> theCol, int theWave)
+	{
+		Board* aBoard = gLawnApp->mBoard;
+		std::optional<ZombieType> aType = ZombieTypeNamed(theZombie);
+		if (aBoard == nullptr || !aType)
+			return MakeProblem(ProblemCode::Internal, std::format("no zombie type is called {}", theZombie));
+
+		if (theRow >= LawnRows(aBoard) || !aBoard->RowCanHaveZombieType(theRow, *aType))
+			return CantSendZombie(SendReason::Row, std::format("{} can't go in row {}", WithArticle(theZombie), theRow));
+		// A copy of the game's water rule (Board::RowCanHaveZombieType), judged for the wave being paid for:
+		// the game's own check reads its wave counter, which is already one ahead once a wave has arrived.
+		if (aBoard->mPlantRow[theRow] == PlantRowType::PLANTROW_POOL && theWave < 5 && !Board::IsZombieTypePoolOnly(*aType))
+			return CantSendZombie(SendReason::Row, std::format("row {} is water, which zombies that walk only take from wave 6", theRow));
+		if (*aType == ZombieType::ZOMBIE_BUNGEE && theCol)
+		{
+			if (std::optional<std::string> aWhy = BungeeCantTake(aBoard, *theCol, theRow))
+				return CantSendZombie(SendReason::BungeeTarget, *aWhy);
+		}
+		return std::nullopt;
+	}
+
+	std::variant<SpawnedZombie, Problem> SpawnZombie(const std::string& theZombie, int theRow, std::optional<int> theCol, int theWave)
+	{
+		if (std::optional<Problem> aProblem = CheckZombiePlace(theZombie, theRow, theCol, theWave))
+			return *aProblem;
+		Board* aBoard = gLawnApp->mBoard;
+		ZombieType aType = *ZombieTypeNamed(theZombie);
+
+		int aHealthBefore = aBoard->TotalZombiesHealthInWave(theWave);
+		Zombie* aZombie = aBoard->AddZombieInRow(aType, theRow, theWave);
+		if (aZombie == nullptr || aZombie->mDead)
+			return CantSendZombie(SendReason::TooManyZombies, "the game already has as many zombies as it can hold");
+		if (aType == ZombieType::ZOMBIE_BUNGEE && theCol)
+		{
+			// A copy of Challenge::IZombiePlaceZombie's bungee drop, which aims it at one tile.
+			aZombie->mTargetCol = *theCol;
+			aZombie->SetRow(theRow);
+			aZombie->mPosX = aBoard->GridToPixelX(*theCol, theRow);
+			aZombie->mPosY = aZombie->GetPosYBasedOnRow(theRow);
+			aZombie->mRenderOrder = Board::MakeRenderOrder(RenderLayer::RENDER_LAYER_GRAVE_STONE, theRow, 7);
+		}
+		return SpawnedZombie{ aBoard->mZombies.DataArrayGetID(aZombie), aBoard->TotalZombiesHealthInWave(theWave) - aHealthBefore };
+	}
+
 	bool GameLoaded()
 	{
 		return gLawnApp->mLoaded;
@@ -1153,6 +1254,27 @@ namespace PvzLab
 	{
 		if (Board* aBoard = gLawnApp->mBoard)
 			aBoard->mZombieHealthToNextWave = -1;
+	}
+
+	int WaveHealthStart()
+	{
+		Board* aBoard = gLawnApp->mBoard;
+		return aBoard != nullptr ? aBoard->mZombieHealthWaveStart : 0;
+	}
+
+	float WaveTargetFraction()
+	{
+		// A copy of the game's draw for its early-wave target (Board::UpdateZombieSpawning).
+		return RandRangeFloat(0.5f, 0.65f);
+	}
+
+	void SetWaveShortcut(int theWaveStart, int theTarget)
+	{
+		if (Board* aBoard = gLawnApp->mBoard)
+		{
+			aBoard->mZombieHealthWaveStart = theWaveStart;
+			aBoard->mZombieHealthToNextWave = theTarget;
+		}
 	}
 
 	void CaptureVersusWaves(VersusInfo& theInfo)
