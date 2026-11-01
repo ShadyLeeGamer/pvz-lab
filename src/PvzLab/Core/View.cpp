@@ -16,6 +16,15 @@ namespace PvzLab
 	{
 		Snapshot aView = theFull;
 		aView.mFullView = false;
+		aView.mVersusPending.reset();
+		if (aView.mVersus)
+		{
+			aView.mVersus->mPayTable.reset();
+			aView.mVersus->mWavesAtStart.reset();
+			aView.mVersus->mWavesNow.reset();
+			aView.mVersus->mWaveHealthStart.reset();
+			aView.mVersus->mWaveHealthTarget.reset();
+		}
 		if (!aView.mBoard)
 			return aView;
 
@@ -35,6 +44,13 @@ namespace PvzLab
 
 		aBoard.mProgress.mNextWaveIn.reset();
 		aBoard.mProgress.mUpcomingWaves.reset();
+		return aView;
+	}
+
+	Snapshot ZombiesView(const Snapshot& theFull)
+	{
+		Snapshot aView = PlayerView(theFull);
+		aView.mZombiesView = true;
 		return aView;
 	}
 }

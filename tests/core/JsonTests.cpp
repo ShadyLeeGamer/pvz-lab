@@ -52,6 +52,50 @@ TEST_CASE("the player view's JSON leaves out hidden fields")
 	CHECK_FALSE(aProgress.contains("upcomingWaves"));
 }
 
+TEST_CASE("a versus level's JSON shows the zombie side's points and types; the full view adds its pay table")
+{
+	json aFull = json::parse(SnapshotToJson(MakeVersusSnapshot()));
+	const json& aVersus = aFull.at("versus");
+	CHECK(aVersus.at("points") == 3);
+	CHECK(aVersus.at("wave") == 7);
+	CHECK(aVersus.at("types").at(0) == json{ { "zombie", "zombie" }, { "cost", 1 }, { "firstWave", 1 }, { "ready", true } });
+	CHECK(aVersus.at("payTable").at(9) == 9);
+	CHECK(aVersus.at("wavesAtStart").at(0).at(0) == "zombie");
+	CHECK(aVersus.at("wavesNow").at(0).empty());
+	CHECK(aVersus.at("waveHealthStart") == 0);
+	CHECK(aVersus.at("waveHealthTarget") == -1);
+
+	json aPlayer = json::parse(SnapshotToJson(PlayerView(MakeVersusSnapshot())));
+	const json& aShared = aPlayer.at("versus");
+	CHECK(aShared.at("points") == 3);
+	CHECK(aShared.at("types").size() == 2);
+	for (const char* aHidden : { "payTable", "wavesAtStart", "wavesNow", "waveHealthStart", "waveHealthTarget" })
+	{
+		CAPTURE(aHidden);
+		CHECK_FALSE(aShared.contains(aHidden));
+	}
+
+	json aZombies = json::parse(SnapshotToJson(ZombiesView(MakeVersusSnapshot())));
+	CHECK(aZombies.at("view") == "zombies");
+	CHECK(aZombies.at("versus") == aShared);
+}
+
+TEST_CASE("without versus, the JSON has no versus field")
+{
+	CHECK_FALSE(json::parse(SnapshotToJson(MakeLevelSnapshot())).contains("versus"));
+	CHECK_FALSE(json::parse(SnapshotToJson(PlayerView(MakeLevelSnapshot()))).contains("versus"));
+	CHECK_FALSE(json::parse(SnapshotToJson(MakeLevelSnapshot())).contains("versusPending"));
+}
+
+TEST_CASE("only the full view says a versus start is waiting for play to begin")
+{
+	Snapshot aWaiting = MakeLevelSnapshot();
+	aWaiting.mVersusPending = true;
+	CHECK(json::parse(SnapshotToJson(aWaiting)).at("versusPending") == true);
+	CHECK_FALSE(json::parse(SnapshotToJson(PlayerView(aWaiting))).contains("versusPending"));
+	CHECK_FALSE(json::parse(SnapshotToJson(ZombiesView(aWaiting))).contains("versusPending"));
+}
+
 TEST_CASE("the full view's JSON includes the hidden fields")
 {
 	json aJson = json::parse(SnapshotToJson(MakeLevelSnapshot()));

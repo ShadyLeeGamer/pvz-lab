@@ -63,15 +63,23 @@ namespace PvzLab
 		std::optional<int>				mLevel;					// Adventure level 1-50; empty: the profile's current level
 		std::vector<std::string>		mSeeds;					// for levels that make you choose seeds
 		bool							mThenRun = false;		// false: freeze at the first moment of play
+		bool							mVersus = false;		// a versus level: the zombie side is played through the API
 	};
 
-	using Control = std::variant<Freeze, Run, Step, StartLevel>;
+	// Picks seeds on the seed chooser that's open now, and never starts or restarts a level.
+	struct ChooseSeeds
+	{
+		std::vector<std::string>		mSeeds;
+		bool							mThenRun = false;
+	};
+
+	using Control = std::variant<Freeze, Run, Step, StartLevel, ChooseSeeds>;
 	using Request = std::variant<Action, Control>;
 
 	enum class ProblemCode
 	{
 		BadRequest,			// 400: the request itself is malformed
-		NotPlaying,			// 409, down to BadSeeds: the game can't do it right now
+		NotPlaying,			// 409, down to NotAVersusLevel: the game can't do it right now
 		Paused,
 		DialogOpen,
 		LevelEnding,
@@ -86,6 +94,8 @@ namespace PvzLab
 		NoProfile,
 		NeedsInput,
 		BadSeeds,
+		NotAtSeedChooser,
+		NotAVersusLevel,
 		Interrupted,		// 409: another control command replaced this one
 		Busy,				// 503: the game didn't pick the request up
 		ShuttingDown,		// 503

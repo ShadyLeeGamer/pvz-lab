@@ -15,6 +15,29 @@ TEST_CASE("damage stages use the game's art thresholds")
 	CHECK(DamageFromHealth(0, 0) == Damage::None);
 }
 
+TEST_CASE("both seats see the zombie side's points and types, and neither sees the full view's extras")
+{
+	Snapshot aPlayer = PlayerView(MakeVersusSnapshot());
+	REQUIRE(aPlayer.mVersus);
+	CHECK(aPlayer.mVersus->mPoints == 3);
+	CHECK(aPlayer.mVersus->mTypes.size() == 2);
+	CHECK_FALSE(aPlayer.mVersus->mPayTable);
+	CHECK_FALSE(aPlayer.mVersus->mWavesAtStart);
+	CHECK_FALSE(aPlayer.mVersus->mWavesNow);
+	CHECK_FALSE(aPlayer.mVersus->mWaveHealthStart);
+	CHECK_FALSE(aPlayer.mVersus->mWaveHealthTarget);
+	CHECK_FALSE(aPlayer.mZombiesView);
+
+	Snapshot aZombies = ZombiesView(MakeVersusSnapshot());
+	CHECK(aZombies.mZombiesView);
+	CHECK_FALSE(aZombies.mFullView);
+	REQUIRE(aZombies.mVersus);
+	CHECK(aZombies.mVersus->mPoints == 3);
+	CHECK_FALSE(aZombies.mVersus->mPayTable);
+	REQUIRE(aZombies.mBoard);
+	CHECK(aZombies.mBoard->mZombies.size() == 1);	// the off-screen zombie isn't the zombie seat's own
+}
+
 TEST_CASE("the player view hides what a player can't see")
 {
 	Snapshot aView = PlayerView(MakeLevelSnapshot());

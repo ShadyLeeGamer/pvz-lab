@@ -985,7 +985,7 @@ namespace PvzLab
 		return aTypes;
 	}
 
-	std::optional<Problem> ChooseSeeds(const std::vector<std::string>& theSeeds)
+	std::optional<Problem> PickSeeds(const std::vector<std::string>& theSeeds)
 	{
 		LawnApp* anApp = gLawnApp;
 		Board* aBoard = anApp->mBoard;
@@ -1054,6 +1054,123 @@ namespace PvzLab
 	{
 		LawnApp* anApp = gLawnApp;
 		return anApp->mBoard != nullptr && anApp->IsAdventureMode() ? anApp->mBoard->mLevel : 0;
+	}
+
+	// ---- Versus ----
+
+	namespace
+	{
+		int WaveCount(Board* theBoard)
+		{
+			return std::clamp(theBoard->mNumWaves, 0, static_cast<int>(MAX_ZOMBIE_WAVES));
+		}
+
+		// A wave's list ends at its first empty slot (Board::SpawnZombieWave).
+		std::vector<ZombieType> WaveTypes(Board* theBoard, int theWave)
+		{
+			std::vector<ZombieType> aTypes;
+			for (int i = 0; i < MAX_ZOMBIES_IN_WAVE; i++)
+			{
+				ZombieType aType = theBoard->mZombiesInWave[theWave][i];
+				if (aType == ZombieType::ZOMBIE_INVALID)
+					break;
+				aTypes.push_back(aType);
+			}
+			return aTypes;
+		}
+	}
+
+	std::optional<BoardKey> CurrentBoard()
+	{
+		Board* aBoard = gLawnApp->mBoard;
+		if (aBoard == nullptr)
+			return std::nullopt;
+		return BoardKey{ reinterpret_cast<uintptr_t>(aBoard), aBoard->mBoardUpdateCounter };
+	}
+
+	std::vector<Wave> ReadWaves()
+	{
+		std::vector<Wave> aWaves;
+		Board* aBoard = gLawnApp->mBoard;
+		if (aBoard == nullptr)
+			return aWaves;
+		for (int aWave = 0; aWave < WaveCount(aBoard); aWave++)
+		{
+			Wave anInfo;
+			anInfo.mFlagWave = aBoard->IsFlagWave(aWave);
+			for (ZombieType aType : WaveTypes(aBoard, aWave))
+				anInfo.mZombies.push_back(WaveZombie{ ZombieName(aType), GetZombieDefinition(aType).mZombieValue });
+			aWaves.push_back(std::move(anInfo));
+		}
+		return aWaves;
+	}
+
+	std::vector<ZombieKind> LevelZombieKinds()
+	{
+		std::vector<ZombieKind> aKinds;
+		Board* aBoard = gLawnApp->mBoard;
+		if (aBoard == nullptr)
+			return aKinds;
+		// The same types the game puts in a level's final wave (Board::PutInMissingZombies), which leaves out the Yeti.
+		for (int aType = 0; aType < ZombieType::NUM_ZOMBIE_TYPES; aType++)
+		{
+			ZombieType aZombieType = static_cast<ZombieType>(aType);
+			if (aZombieType == ZombieType::ZOMBIE_YETI || !Board::CanZombieSpawnOnLevel(aZombieType, aBoard->mLevel))
+				continue;
+			const ZombieDefinition& aDef = GetZombieDefinition(aZombieType);
+			aKinds.push_back(ZombieKind{ ZombieName(aZombieType), aDef.mZombieValue, aDef.mFirstAllowedWave });
+		}
+		return aKinds;
+	}
+
+	void EmptyWavesKeepingFlags()
+	{
+		Board* aBoard = gLawnApp->mBoard;
+		if (aBoard == nullptr)
+			return;
+		for (int aWave = 0; aWave < WaveCount(aBoard); aWave++)
+		{
+			int aKept = 0;
+			for (ZombieType aType : WaveTypes(aBoard, aWave))
+			{
+				if (aType == ZombieType::ZOMBIE_FLAG)
+					aBoard->mZombiesInWave[aWave][aKept++] = aType;
+			}
+			if (aKept < MAX_ZOMBIES_IN_WAVE)
+				aBoard->mZombiesInWave[aWave][aKept] = ZombieType::ZOMBIE_INVALID;
+		}
+	}
+
+	WaveCounter ReadWaveCounter()
+	{
+		Board* aBoard = gLawnApp->mBoard;
+		if (aBoard == nullptr)
+			return {};
+		return WaveCounter{ aBoard->mCurrentWave, aBoard->mHugeWaveCountDown > 0 };
+	}
+
+	void SetWaveTimerOnly()
+	{
+		if (Board* aBoard = gLawnApp->mBoard)
+			aBoard->mZombieHealthToNextWave = -1;
+	}
+
+	void CaptureVersusWaves(VersusInfo& theInfo)
+	{
+		Board* aBoard = gLawnApp->mBoard;
+		if (aBoard == nullptr)
+			return;
+		std::vector<std::vector<std::string>> aWaves;
+		for (int aWave = 0; aWave < WaveCount(aBoard); aWave++)
+		{
+			std::vector<std::string> aNames;
+			for (ZombieType aType : WaveTypes(aBoard, aWave))
+				aNames.push_back(ZombieName(aType));
+			aWaves.push_back(std::move(aNames));
+		}
+		theInfo.mWavesNow = std::move(aWaves);
+		theInfo.mWaveHealthStart = aBoard->mZombieHealthWaveStart;
+		theInfo.mWaveHealthTarget = aBoard->mZombieHealthToNextWave;
 	}
 
 	bool WindowMinimized()

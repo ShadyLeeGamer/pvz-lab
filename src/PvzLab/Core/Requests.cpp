@@ -41,6 +41,8 @@ namespace PvzLab
 			case ProblemCode::NoProfile:		return { "no_profile", 409, "there's no player profile yet; create one in the game first" };
 			case ProblemCode::NeedsInput:		return { "needs_input", 409, "the level is waiting for a click the API can't make yet" };
 			case ProblemCode::BadSeeds:			return { "bad_seeds", 409, "this level needs its seeds chosen" };
+			case ProblemCode::NotAtSeedChooser:	return { "not_at_seed_chooser", 409, "no seed chooser is open right now" };
+			case ProblemCode::NotAVersusLevel:	return { "not_a_versus_level", 409, "this level can't be played in versus" };
 			case ProblemCode::Interrupted:		return { "interrupted", 409, "another control command replaced this one" };
 			case ProblemCode::Busy:				return { "busy", 503, "the game didn't pick the request up within 2 seconds (it may still be loading, or a dialog such as the Almanac or the Store may be open)" };
 			case ProblemCode::ShuttingDown:		return { "shutting_down", 503, "the game is closing" };
@@ -155,9 +157,41 @@ namespace PvzLab
 			return std::nullopt;
 		}
 
+		// "seeds": plant names, each once, at most 10.
+		std::optional<Problem> ReadSeeds(const Json& theSeeds, std::vector<std::string>& theNames)
+		{
+			if (!theSeeds.is_array())
+				return Bad("\"seeds\" must be a list of plant names");
+			for (const Json& aSeed : theSeeds)
+			{
+				if (!aSeed.is_string() || aSeed.get<std::string>().empty())
+					return Bad("\"seeds\" must be a list of plant names");
+				std::string aName = aSeed.get<std::string>();
+				if (std::ranges::find(theNames, aName) != theNames.end())
+					return Bad(std::format("\"{}\" is in \"seeds\" twice", aName));
+				theNames.push_back(std::move(aName));
+			}
+			if (theNames.size() > 10)
+				return Bad("\"seeds\" can have at most 10 plants");
+			return std::nullopt;
+		}
+
+		// "then": what to do once play starts, "freeze" (the default) or "run".
+		std::optional<Problem> ReadThen(const Json& theJson, bool& theThenRun)
+		{
+			if (auto aThen = theJson.find("then"); aThen != theJson.end())
+			{
+				if (*aThen == "run")
+					theThenRun = true;
+				else if (*aThen != "freeze")
+					return Bad("\"then\" must be \"freeze\" or \"run\"");
+			}
+			return std::nullopt;
+		}
+
 		std::variant<Control, Problem> ReadStartLevel(const Json& theJson, Fields& theFields)
 		{
-			theFields.Allow({ "level", "seeds", "then" });
+			theFields.Allow({ "level", "seeds", "then", "versus" });
 			if (theFields.Error())
 				return *theFields.Error();
 
@@ -168,32 +202,40 @@ namespace PvzLab
 				if (!aStart.mLevel)
 					return Bad("\"level\" must be an Adventure level: 1 to 50, or a name from \"1-1\" to \"5-10\"");
 			}
-
 			if (auto aSeeds = theJson.find("seeds"); aSeeds != theJson.end())
 			{
-				if (!aSeeds->is_array())
-					return Bad("\"seeds\" must be a list of plant names");
-				for (const Json& aSeed : *aSeeds)
-				{
-					if (!aSeed.is_string() || aSeed.get<std::string>().empty())
-						return Bad("\"seeds\" must be a list of plant names");
-					std::string aName = aSeed.get<std::string>();
-					if (std::ranges::find(aStart.mSeeds, aName) != aStart.mSeeds.end())
-						return Bad(std::format("\"{}\" is in \"seeds\" twice", aName));
-					aStart.mSeeds.push_back(std::move(aName));
-				}
-				if (aStart.mSeeds.size() > 10)
-					return Bad("\"seeds\" can have at most 10 plants");
+				if (std::optional<Problem> aProblem = ReadSeeds(*aSeeds, aStart.mSeeds))
+					return *aProblem;
 			}
+			if (std::optional<Problem> aProblem = ReadThen(theJson, aStart.mThenRun))
+				return *aProblem;
 
-			if (auto aThen = theJson.find("then"); aThen != theJson.end())
+			if (auto aVersus = theJson.find("versus"); aVersus != theJson.end())
 			{
-				if (*aThen == "run")
-					aStart.mThenRun = true;
-				else if (*aThen != "freeze")
-					return Bad("\"then\" must be \"freeze\" or \"run\"");
+				if (!aVersus->is_boolean())
+					return Bad("\"versus\" must be true or false");
+				aStart.mVersus = aVersus->get<bool>();
+				if (aStart.mVersus && !aStart.mLevel)
+					return Bad("a versus start needs a \"level\"");
 			}
 			return aStart;
+		}
+
+		std::variant<Control, Problem> ReadChooseSeeds(const Json& theJson, Fields& theFields)
+		{
+			theFields.Allow({ "seeds", "then" });
+			if (theFields.Error())
+				return *theFields.Error();
+
+			ChooseSeeds aChoose;
+			auto aSeeds = theJson.find("seeds");
+			if (aSeeds == theJson.end())
+				return Bad("\"seeds\" is missing");
+			if (std::optional<Problem> aProblem = ReadSeeds(*aSeeds, aChoose.mSeeds))
+				return *aProblem;
+			if (std::optional<Problem> aProblem = ReadThen(theJson, aChoose.mThenRun))
+				return *aProblem;
+			return aChoose;
 		}
 	}
 
@@ -291,7 +333,9 @@ namespace PvzLab
 		}
 		if (aType == "startLevel")
 			return ReadStartLevel(aJson, aFields);
-		return Bad(std::format("unknown control \"{}\"; expected freeze, run, step or startLevel", aType));
+		if (aType == "chooseSeeds")
+			return ReadChooseSeeds(aJson, aFields);
+		return Bad(std::format("unknown control \"{}\"; expected freeze, run, step, startLevel or chooseSeeds", aType));
 	}
 
 	std::optional<int> LevelFromName(std::string_view theName)

@@ -44,6 +44,7 @@ A copy of the game state, taken at the end of the latest tick, and again right a
 | Query | Meaning |
 |---|---|
 | `view=player` (default) | Only what a player could see on screen. |
+| `view=zombies` | In a versus level, what the zombie side's player sees. The same as `player`, so neither side sees more than the other. |
 | `view=full` | Everything below, including hidden information. For debugging and overlays. |
 
 Errors: `400 bad_view` for any other `view`; `503 not_ready` before the first tick.
@@ -53,7 +54,7 @@ Errors: `400 bad_view` for any other `view`; `503 not_ready` before the first ti
 | Field | Type | Notes |
 |---|---|---|
 | `apiVersion` | number | |
-| `view` | `"player"` \| `"full"` | |
+| `view` | `"player"` \| `"zombies"` \| `"full"` | |
 | `appTicks` | number | Ticks since the game started. |
 | `scene` | string | `loading` (title screen), `menu`, `level_intro`, `playing`, `zombies_won`, `award`, `challenge_menu`, `credits`. |
 | `mode` | string | `adventure` or `other`. |
@@ -62,6 +63,8 @@ Errors: `400 bad_view` for any other `view`; `503 not_ready` before the first ti
 | `dialogOpen` | boolean | A game dialog is open (options, game over, ...). Actions are refused while one is. |
 | `minimized` | boolean | Game time stands still while the window is minimized. |
 | `board` | object \| null | The level in progress; `null` outside a level. |
+| `versus` | object | Only while a versus level is in play. See [`versus`](#versus). |
+| `versusPending` | `true` | Full view only: a versus start's level hasn't reached play yet (it may be waiting at its seed chooser). |
 
 ### `board`
 
@@ -143,11 +146,31 @@ Zombies that are dying, or not part of the level (menus, cutscenes), are left ou
 | `nextWaveIn` | Full view only: ticks until the next wave. |
 | `upcomingWaves` | Full view only: zombie types in the next (up to) three waves. |
 
+### `versus`
+
+In a versus level the zombie side is played through this API instead of by the level's own waves. The game is still the referee: its wave timer, flags, banners, progress bar and win checks all run as normal.
+
+- At the first moment of play, the game's own waves are emptied, except the flag zombie that leads each flag wave, which still walks on.
+- Each wave pays the zombie side what the game's own zombies in that wave would have cost, less the flag zombie. A normal wave pays when it arrives. A flag wave pays when its "huge wave" warning starts, 7.5 seconds earlier.
+- Each payday replaces whatever points were left from the one before.
+- Until the points are spent, the next wave waits for its timer. The game's usual early wave, when the last one is mostly beaten, needs zombies to beat.
+
+| Field | Notes |
+|---|---|
+| `points` | Points left to spend on the wave being paid for. |
+| `wave` | The wave being paid for, counting from 1; `0` before the first payday. |
+| `types` | The level's own zombie types, as `{ zombie, cost, firstWave, ready }`. A type can't come before `firstWave`, except in the final wave, which allows every type. `ready` means it's allowed in the wave being paid for and affordable now. |
+| `payTable` | Full view only: what each wave pays, from wave 1. |
+| `wavesAtStart` | Full view only: each wave's zombies as the game picked them, read at the first moment of play. |
+| `wavesNow` | Full view only: each wave's zombies now: only flag zombies are left. |
+| `waveHealthStart`, `waveHealthTarget` | Full view only: the game's own values for its early-wave check. A target of `-1` means the next wave waits for its timer. |
+
 ### What the player view leaves out
 
 - Exact health of plants, zombies and their armour. The `damage` stages and `hasArm`/`hasHead` show what the art shows.
 - `nextWaveIn` and `upcomingWaves`.
 - Zombies that haven't walked on screen yet.
+- `versusPending`, and the full-view-only fields of `versus`.
 
 Not handled yet: zombies hidden by fog (Adventure levels 31–40) and by Stormy Night's darkness still appear in the player view.
 
@@ -201,7 +224,8 @@ Controls game time and starts levels, as `{ "type": ..., ...fields }`.
 | `freeze` | none | Stops game time. The window keeps drawing and the game still takes clicks. |
 | `run` | `speed` (optional) | Runs game time continuously. |
 | `step` | `ticks` (1–360000), `speed` (optional) | Runs exactly `ticks` ticks, then freezes. Replies once they have run. |
-| `startLevel` | `level` (optional), `seeds` (optional), `then` (optional) | Starts an Adventure level from wherever the game is, skips the intro, and freezes at the first moment of play. |
+| `startLevel` | `level` (optional), `seeds` (optional), `then` (optional), `versus` (optional) | Starts an Adventure level from wherever the game is, skips the intro, and freezes at the first moment of play. |
+| `chooseSeeds` | `seeds`, `then` (optional) | Picks the seeds on the seed chooser that's open now, then freezes at the first moment of play. It never starts or restarts a level. |
 
 **Speed** is how many ticks run per frame: `1` is normal speed and `50` is the most. It's a dial: it stays where it was last set, and `step` and `run` use it unless they set it themselves.
 
@@ -217,11 +241,14 @@ Controls game time and starts levels, as `{ "type": ..., ...fields }`.
   The level then waits at its seed chooser. A `startLevel` for the same `level` picks the seeds there, so the level played is the one whose street was shown. Starting it any other way picks new waves.
 - The street shows one or more of each zombie type in the level's waves. The game leaves out the flag zombie that leads a big wave, and always adds a ducky tube zombie on pool levels.
 - `then`: `"freeze"` (default) or `"run"` once play has started.
+- `versus`: `true` makes it a versus level (see [`versus`](#versus)); it needs a `level`. Versus belongs to the level this start begins, so it lasts however the seeds get picked: by a second `startLevel`, by `chooseSeeds`, or by a person in the game window. It ends when another level starts. 1-1 can't be a versus level (`409 not_a_versus_level`): the first time through it has no flag waves, so nothing would be left to end it. A start refused for anything but `bad_seeds` leaves no versus behind.
 - It waits for the game to finish loading, closes a "game over" or "continue?" dialog, and leaves the title screen, menus or award screen the way the game's own buttons do.
 - Like the game's own level select, it sets the profile's Adventure level and drops any saved game for that mode. Use a separate save folder (`-savedir`) for experiments.
 - Not supported yet: levels that start with Crazy Dave talking or the shovel tutorial (`409 needs_input`), and picking the Imitater.
 
-Every control command takes over the clock, so one still running (a step, or a level start) is answered `409 interrupted`. Replies carry the clock afterwards. A level start also says which zombie types its intro showed on the street:
+**`chooseSeeds`:** `seeds` as for `startLevel`. It only works while a seed chooser is open (`409 not_at_seed_chooser` otherwise), so a late or repeated pick can't restart a level. Wrong seeds get the same `bad_seeds` reply as `startLevel`, and its success reply is the same too.
+
+Every control command takes over the clock, so one still running (a step, a level start or a seed pick) is answered `409 interrupted`. Replies carry the clock afterwards. A level start also says which zombie types its intro showed on the street:
 
 ```json
 { "ok": true, "appTicks": 4180, "level": 1, "levelName": "1-1", "zombies": ["zombie"], "clock": { "state": "frozen", "speed": 1 } }
@@ -243,6 +270,8 @@ Every control command takes over the clock, so one still running (a step, or a l
 | 409 | `no_shovel` | The level has no shovel (see `shovel` in `/state`). |
 | 409 | `cant_dig_up` | There's nothing to dig up on the tile, the plant named isn't there, or the game won't let it be dug up yet; the message says which. |
 | 409 | `no_profile`, `needs_input`, `bad_seeds` | A level can't be started (see `startLevel`). |
+| 409 | `not_a_versus_level` | That level can't be played in versus (see `startLevel`). |
+| 409 | `not_at_seed_chooser` | No seed chooser is open (see `chooseSeeds`). |
 | 409 | `interrupted` | A newer control command replaced this one. |
 | 500 | `internal` | Something unexpected; the message says what. |
 | 503 | `not_ready`, `busy`, `shutting_down` | The game isn't ready, didn't pick the request up, or is closing. |

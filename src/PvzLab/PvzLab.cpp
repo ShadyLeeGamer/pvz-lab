@@ -3,6 +3,7 @@
 #include "Bridge.h"
 #include "Common.h"
 #include "Core/Clock.h"
+#include "Core/Versus.h"
 #include "Mailbox.h"
 #include <charconv>
 #include <memory>
@@ -37,14 +38,75 @@ namespace PvzLab
 			std::optional<StartLevel>		mStart;					// empty for a step
 			bool							mLevelBegun = false;	// the level's intro is under way
 			std::vector<std::string>		mStreetZombies;			// what the intro showed on the street
+			bool							mChooseOnly = false;	// chooseSeeds: picks on the open chooser, and leaves versus as it is
 		};
 		std::optional<LongRequest> gLong;
+
+		// A versus level: marked when a start asks for one, and switched on at its first tick of play.
+		// The mark belongs to the board that start created, not to the request, so it lasts however
+		// the seeds get picked, and ends when another level starts or the board changes.
+		std::optional<BoardKey> gVersusMark;
+		std::optional<Versus> gVersus;
 
 		void PublishSnapshot()
 		{
 			Snapshot aSnapshot = CaptureSnapshot();
 			aSnapshot.mClock = gClock.Info();
+			if (gVersus)
+			{
+				aSnapshot.mVersus = gVersus->Info();
+				CaptureVersusWaves(*aSnapshot.mVersus);
+			}
+			else if (gVersusMark)
+			{
+				aSnapshot.mVersusPending = true;
+			}
 			gMailbox->Publish(std::make_shared<const Snapshot>(std::move(aSnapshot)));
+		}
+
+		void EndVersus()
+		{
+			gVersusMark.reset();
+			gVersus.reset();
+		}
+
+		// The level on screen now belongs to a start: it's a versus level if that start asked for one.
+		void MarkVersus(bool theVersus)
+		{
+			EndVersus();
+			if (theVersus)
+				gVersusMark = CurrentBoard();
+		}
+
+		// After every tick: switches a marked level to versus at its first tick of play, then pays the
+		// zombie side and keeps each next wave on its timer.
+		void UpdateVersus()
+		{
+			if (!gVersusMark)
+				return;
+			std::optional<BoardKey> aBoard = CurrentBoard();
+			if (!aBoard || aBoard->mBoard != gVersusMark->mBoard || aBoard->mTicks < gVersusMark->mTicks)
+			{
+				EndVersus();	// another level started, or the player left this one
+				return;
+			}
+			gVersusMark->mTicks = aBoard->mTicks;
+
+			if (!gVersus)
+			{
+				if (!PlayStarted())
+					return;
+				// The street and the seed chooser have shown the game's own waves; from here on the zombie side plays.
+				gVersus.emplace(ReadWaves(), LevelZombieKinds());
+				EmptyWavesKeepingFlags();
+			}
+
+			WaveCounter aWaves = ReadWaveCounter();
+			std::optional<int> anArrived = gVersus->AfterTick(aWaves.mSent, aWaves.mHugeWaveWarning);
+			// An emptied wave has no health, so the game's kill-fast shortcut would bring the next one about
+			// 6 s later. The final wave has no next one.
+			if (anArrived && !gVersus->IsFinalWave(*anArrived))
+				SetWaveTimerOnly();
 		}
 
 		void Answer(PendingRequest& theRequest, Reply theReply)
@@ -118,8 +180,27 @@ namespace PvzLab
 				}
 				else if (const StartLevel* aStart = std::get_if<StartLevel>(&aControl))
 				{
+					// 1-1 has no flag waves the first time through, so no zombie would be left to die after
+					// its final wave, and the game only checks for the plants' win when one does.
+					if (aStart->mVersus && aStart->mLevel == 1)
+					{
+						aReplies.emplace_back(aPending, Refused(MakeProblem(ProblemCode::NotAVersusLevel, "1-1 can't be played in versus; pick another level")));
+						continue;
+					}
 					gClock.FastForward();
 					gLong = LongRequest{ aPending, *aStart };		// answered once play has started
+				}
+				else if (const ChooseSeeds* aChoose = std::get_if<ChooseSeeds>(&aControl))
+				{
+					// Only on a seed chooser that's open now, so a late or repeated pick never restarts a level.
+					if (WhatIntroWaitsFor() != IntroWait::SeedChooser)
+					{
+						aReplies.emplace_back(aPending, Refused(MakeProblem(ProblemCode::NotAtSeedChooser)));
+						continue;
+					}
+					gClock.FastForward();
+					StartLevel aStart{ CurrentLevel(), aChoose->mSeeds, aChoose->mThenRun };
+					gLong = LongRequest{ .mPending = aPending, .mStart = aStart, .mLevelBegun = true, .mChooseOnly = true };
 				}
 			}
 
@@ -152,13 +233,15 @@ namespace PvzLab
 					aProblem = BeginLevel(aLevel);
 					gLong->mLevelBegun = !aProblem;
 				}
+				if (gLong->mLevelBegun)
+					MarkVersus(gLong->mStart->mVersus);
 			}
 			else
 			{
 				switch (WhatIntroWaitsFor())
 				{
 				case IntroWait::SeedChooser:
-					aProblem = ChooseSeeds(gLong->mStart->mSeeds);
+					aProblem = PickSeeds(gLong->mStart->mSeeds);
 					break;
 				case IntroWait::CrazyDave:
 					aProblem = MakeProblem(ProblemCode::NeedsInput, "Crazy Dave is talking; levels that start with him aren't supported yet");
@@ -179,6 +262,9 @@ namespace PvzLab
 
 			if (aProblem)
 			{
+				// A refused start leaves no versus level behind, except one waiting at its seed chooser for its seeds.
+				if (!gLong->mChooseOnly && aProblem->mCode != ProblemCode::BadSeeds)
+					EndVersus();
 				gClock.Freeze();
 				FinishLong(Refused(*aProblem));
 			}
@@ -259,6 +345,7 @@ namespace PvzLab
 
 		gInTick = true;
 		bool aKeepGoing = gClock.AfterTick(!WindowMinimized());
+		UpdateVersus();
 		// The street zombies leave when the intro ends, and an intro can run through in one frame, so look every tick.
 		if (gLong && gLong->mStart && gLong->mLevelBegun)
 		{

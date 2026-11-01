@@ -62,4 +62,21 @@ namespace PvzLab
 		aSnapshot.mBoard = aBoard;
 		return aSnapshot;
 	}
+
+	// MakeLevelSnapshot() as a versus level: 3 points to spend on wave 7, with the full view's extras.
+	inline Snapshot MakeVersusSnapshot()
+	{
+		Snapshot aSnapshot = MakeLevelSnapshot();
+		VersusInfo aVersus;
+		aVersus.mPoints = 3;
+		aVersus.mWave = 7;
+		aVersus.mTypes = { { "zombie", 1, 1, true }, { "buckethead_zombie", 4, 1, false } };
+		aVersus.mPayTable = std::vector<int>{ 1, 1, 1, 2, 2, 2, 3, 3, 3, 9 };
+		aVersus.mWavesAtStart = std::vector<std::vector<std::string>>{ { "zombie" } };
+		aVersus.mWavesNow = std::vector<std::vector<std::string>>{ {} };
+		aVersus.mWaveHealthStart = 0;
+		aVersus.mWaveHealthTarget = -1;
+		aSnapshot.mVersus = aVersus;
+		return aSnapshot;
+	}
 }

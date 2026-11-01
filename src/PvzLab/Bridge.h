@@ -3,6 +3,8 @@
 
 #include "Core/Requests.h"
 #include "Core/Snapshot.h"
+#include "Core/Versus.h"
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -40,9 +42,32 @@ namespace PvzLab
 	// The zombie types a level's intro shows waiting on the street, which is how a player sees what's coming
 	// (CutScene::PlaceStreetZombies). Empty outside the intro.
 	std::vector<std::string> StreetZombies();
-	std::optional<Problem> ChooseSeeds(const std::vector<std::string>& theSeeds);
+	std::optional<Problem> PickSeeds(const std::vector<std::string>& theSeeds);
 	bool PlayStarted();						// the level's first tick of play has run
 	int CurrentLevel();						// the level being played; 0 outside Adventure
+
+	// Versus: the game's own waves and zombie types, read and changed for the zombie side (see Core/Versus.h).
+	struct BoardKey
+	{
+		uintptr_t						mBoard = 0;				// which board, while it lives
+		uint32_t						mTicks = 0;				// Board::mBoardUpdateCounter; a new board starts again from 0
+	};
+	std::optional<BoardKey> CurrentBoard();	// empty outside a level
+	std::vector<Wave> ReadWaves();			// what the game picked for each wave when the level loaded
+	std::vector<ZombieKind> LevelZombieKinds();	// the zombie types the level uses
+	void EmptyWavesKeepingFlags();			// from now on the game's waves send only their flag zombie
+
+	struct WaveCounter
+	{
+		int								mSent = 0;				// Board::mCurrentWave: the waves sent so far
+		bool							mHugeWaveWarning = false;	// Board::mHugeWaveCountDown > 0
+	};
+	WaveCounter ReadWaveCounter();
+	// The game's own "timer only" value (Board::mZombieHealthToNextWave = -1, as before its first wave),
+	// so the next wave waits for its timer instead of the game's kill-fast shortcut.
+	void SetWaveTimerOnly();
+	// The full view's versus extras: every wave's list as it is now, and the two shortcut values.
+	void CaptureVersusWaves(VersusInfo& theInfo);
 
 	bool WindowMinimized();
 	bool InsideNestedLoop();				// a dialog is running its own copy of the game loop

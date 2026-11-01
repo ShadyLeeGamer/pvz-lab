@@ -160,6 +160,29 @@ namespace PvzLab
 		ProgressInfo					mProgress;
 	};
 
+	// A zombie type the zombie side of a versus match may send (see Versus.h).
+	struct VersusZombieType
+	{
+		std::string						mZombie;				// e.g. "conehead_zombie"
+		int								mCost = 0;
+		int								mFirstWave = 1;			// the first wave it may come in, counting from 1; the final wave allows every type
+		bool							mReady = false;			// allowed in the wave being paid for, and affordable with the points left
+	};
+
+	// The zombie side of a versus match. Only while a versus level is in play.
+	struct VersusInfo
+	{
+		int								mPoints = 0;			// left to spend on the wave being paid for
+		int								mWave = 0;				// the wave being paid for, counting from 1; 0 before the first payday
+		std::vector<VersusZombieType>	mTypes;
+		// Full view only, for tests:
+		std::optional<std::vector<int>>	mPayTable;
+		std::optional<std::vector<std::vector<std::string>>> mWavesAtStart;	// what the game picked, read at the first tick of play
+		std::optional<std::vector<std::vector<std::string>>> mWavesNow;		// every wave's list as it is now
+		std::optional<int>				mWaveHealthStart;		// Board::mZombieHealthWaveStart
+		std::optional<int>				mWaveHealthTarget;		// Board::mZombieHealthToNextWave; -1: the next wave waits for its timer
+	};
+
 	// The time dial (see Clock.h).
 	struct ClockInfo
 	{
@@ -171,6 +194,7 @@ namespace PvzLab
 	struct Snapshot
 	{
 		bool							mFullView = true;		// false once PlayerView() has removed hidden information
+		bool							mZombiesView = false;	// ZombiesView(): what the zombie seat of a versus match sees
 		uint32_t						mAppTicks = 0;			// ticks since the game started
 		std::string						mScene;					// "loading", "menu", "level_intro", "playing", ...
 		std::string						mMode;					// "adventure" or "other"
@@ -180,5 +204,7 @@ namespace PvzLab
 		bool							mMinimized = false;		// game time stands still while the window is minimized
 		bool							mLoaded = false;		// the game has finished loading; until then its loop can stall
 		std::optional<BoardInfo>		mBoard;					// empty outside a level
+		std::optional<VersusInfo>		mVersus;				// empty unless a versus level is in play
+		std::optional<bool>				mVersusPending;			// full view only, for tests: a versus start's level hasn't reached play yet
 	};
 }

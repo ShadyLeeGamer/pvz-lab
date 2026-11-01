@@ -162,6 +162,38 @@ TEST_CASE("startLevel takes a level number or name, seeds, and what to do once p
 	CHECK(ParseBadControl(R"({"type":"startLevel","then":"pause"})").mMessage == "\"then\" must be \"freeze\" or \"run\"");
 }
 
+TEST_CASE("a versus start says so with true or false, and needs its level")
+{
+	Control aControl = ParseGoodControl(R"({"type":"startLevel","level":"1-9","versus":true})");
+	REQUIRE(std::holds_alternative<StartLevel>(aControl));
+	CHECK(std::get<StartLevel>(aControl).mVersus);
+	CHECK_FALSE(std::get<StartLevel>(ParseGoodControl(R"({"type":"startLevel","level":9,"versus":false})")).mVersus);
+	CHECK_FALSE(std::get<StartLevel>(ParseGoodControl(R"({"type":"startLevel","level":9})")).mVersus);
+	CHECK(ParseBadControl(R"({"type":"startLevel","versus":true})").mMessage == "a versus start needs a \"level\"");
+	CHECK(ParseBadControl(R"({"type":"startLevel","level":9,"versus":"yes"})").mMessage == "\"versus\" must be true or false");
+}
+
+TEST_CASE("chooseSeeds takes the seeds and what to do once play starts, and nothing else")
+{
+	Control aControl = ParseGoodControl(R"({"type":"chooseSeeds","seeds":["peashooter","sunflower"],"then":"run"})");
+	REQUIRE(std::holds_alternative<ChooseSeeds>(aControl));
+	CHECK(std::get<ChooseSeeds>(aControl).mSeeds == std::vector<std::string>{ "peashooter", "sunflower" });
+	CHECK(std::get<ChooseSeeds>(aControl).mThenRun);
+	CHECK_FALSE(std::get<ChooseSeeds>(ParseGoodControl(R"({"type":"chooseSeeds","seeds":["peashooter"]})")).mThenRun);
+	CHECK(ParseBadControl(R"({"type":"chooseSeeds"})").mMessage == "\"seeds\" is missing");
+	CHECK(ParseBadControl(R"({"type":"chooseSeeds","seeds":["chomper","chomper"]})").mMessage == "\"chomper\" is in \"seeds\" twice");
+	CHECK(ParseBadControl(R"({"type":"chooseSeeds","seeds":["chomper"],"level":9})").mMessage == "unknown field \"level\"");
+}
+
+TEST_CASE("versus problems come from the game's state, not the request")
+{
+	CHECK(HttpStatus(ProblemCode::NotAtSeedChooser) == 409);
+	CHECK(HttpStatus(ProblemCode::NotAVersusLevel) == 409);
+	CHECK(std::string(ProblemName(ProblemCode::NotAtSeedChooser)) == "not_at_seed_chooser");
+	CHECK(std::string(ProblemName(ProblemCode::NotAVersusLevel)) == "not_a_versus_level");
+	CHECK(MakeProblem(ProblemCode::NotAtSeedChooser).mMessage == "no seed chooser is open right now");
+}
+
 TEST_CASE("level names follow the game's area-level numbering")
 {
 	CHECK(LevelName(1) == "1-1");

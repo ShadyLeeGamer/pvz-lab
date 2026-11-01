@@ -12,4 +12,7 @@ namespace PvzLab
 	// no zombies that haven't walked on screen yet.
 	// Not handled yet: zombies hidden by fog (levels 31-40) or by Stormy Night's darkness.
 	Snapshot PlayerView(const Snapshot& theFull);
+
+	// What the zombie seat of a versus match sees: the same as a player, so neither side knows more.
+	Snapshot ZombiesView(const Snapshot& theFull);
 }

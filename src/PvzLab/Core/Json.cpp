@@ -197,13 +197,43 @@ namespace PvzLab
 			aJson["progress"] = ProgressJson(theBoard.mProgress);
 			return aJson;
 		}
+
+		Json VersusJson(const VersusInfo& theVersus)
+		{
+			Json aTypes = Json::array();
+			for (const VersusZombieType& aType : theVersus.mTypes)
+				aTypes.push_back(Json{ { "zombie", aType.mZombie }, { "cost", aType.mCost }, { "firstWave", aType.mFirstWave }, { "ready", aType.mReady } });
+
+			Json aJson;
+			aJson["points"] = theVersus.mPoints;
+			aJson["wave"] = theVersus.mWave;
+			aJson["types"] = aTypes;
+			if (theVersus.mPayTable)
+				aJson["payTable"] = *theVersus.mPayTable;
+			if (theVersus.mWavesAtStart)
+				aJson["wavesAtStart"] = *theVersus.mWavesAtStart;
+			if (theVersus.mWavesNow)
+				aJson["wavesNow"] = *theVersus.mWavesNow;
+			if (theVersus.mWaveHealthStart)
+				aJson["waveHealthStart"] = *theVersus.mWaveHealthStart;
+			if (theVersus.mWaveHealthTarget)
+				aJson["waveHealthTarget"] = *theVersus.mWaveHealthTarget;
+			return aJson;
+		}
+
+		const char* ViewName(const Snapshot& theSnapshot)
+		{
+			if (theSnapshot.mFullView)
+				return "full";
+			return theSnapshot.mZombiesView ? "zombies" : "player";
+		}
 	}
 
 	std::string SnapshotToJson(const Snapshot& theSnapshot)
 	{
 		Json aJson;
 		aJson["apiVersion"] = kApiVersion;
-		aJson["view"] = theSnapshot.mFullView ? "full" : "player";
+		aJson["view"] = ViewName(theSnapshot);
 		aJson["appTicks"] = theSnapshot.mAppTicks;
 		aJson["scene"] = theSnapshot.mScene;
 		aJson["mode"] = theSnapshot.mMode;
@@ -212,6 +242,10 @@ namespace PvzLab
 		aJson["dialogOpen"] = theSnapshot.mDialogOpen;
 		aJson["minimized"] = theSnapshot.mMinimized;
 		aJson["board"] = theSnapshot.mBoard ? BoardJson(*theSnapshot.mBoard) : Json(nullptr);
+		if (theSnapshot.mVersus)
+			aJson["versus"] = VersusJson(*theSnapshot.mVersus);
+		if (theSnapshot.mVersusPending)
+			aJson["versusPending"] = *theSnapshot.mVersusPending;
 		return aJson.dump();
 	}
 
