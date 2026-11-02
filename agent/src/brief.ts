@@ -1,9 +1,31 @@
 // The instructions a player starts with: a brief from ../prompts with the session filled in. {level}
-// becomes the level, and {rules} the rules for this session's clock, speed and tools, so the player is
-// only told about what it can actually do.
+// becomes the level, and {rules} the rules for this session's side, clock, speed and tools, so the
+// player is only told about what it can actually do.
 import type { Session, ToolName } from "./session.ts";
 
-export function sessionRules({ clock, speed, tools }: Session): string[] {
+// The zombie side always plays in real time (session.ts), against plants that play on while it thinks.
+function zombieRules({ speed, tools }: Session): string[] {
+  const has = (tool: ToolName) => tools.includes(tool);
+  const fast = speed > 1 ? ` It runs at ${speed} times normal speed.` : "";
+  const costs = has("get_state") ? " get_state shows what each costs and which are ready to send." : "";
+  return [
+    `The game keeps running while you think: your zombies keep walking and the plants keep fighting, so the time between your moves is game time too.${fast}`,
+    "Each wave pays you points when it arrives: what the game's own zombies in that wave would have cost. Spend them on that wave. Points still unspent when the next wave pays are lost.",
+    `You can send the level's own zombie types, each for its cost. A type can't come before its first wave, except in the final wave, which allows every type.${costs}`,
+    "Your zombies walk in from the right, in the row you choose. The game refuses a row a zombie can't use, such as dirt, or water before wave 6 for a zombie that only walks.",
+    "In a level with bungee zombies, a bungee_zombie drops onto the tile you name and carries off the plant there.",
+    "A huge wave pays you 7.5 seconds early, when its warning shows. Zombies you send during the warning are held, and walk on together with the wave's flag zombie, which the game still sends.",
+    "Once a wave's points are spent, your zombies count as that wave: if the plants beat them down, the next wave comes early, as it does with the game's own waves. Until then, the next wave waits for its timer.",
+    "The final wave is your last payday. Once it has arrived, the plants win as soon as no zombie is left on the lawn, so send its zombies during its warning or as soon as it arrives.",
+    ...(has("wait") ? ["wait lets time pass, and ends early when a wave pays you or the level ends."] : []),
+    "The lawn is a grid. Columns run from 0, next to the plants' house on the left, to 8 on the right, where your zombies walk in. Rows count from 0 at the top.",
+    "Every tool tells you what happened and then shows the game.",
+  ];
+}
+
+export function sessionRules(settings: Session): string[] {
+  if (settings.side === "zombies") return zombieRules(settings);
+  const { clock, speed, tools } = settings;
   const has = (tool: ToolName) => tools.includes(tool);
   const rules: string[] = [];
 

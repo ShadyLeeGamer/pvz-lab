@@ -27,7 +27,7 @@ describe("loadSession", () => {
 
   it("fills in the defaults and finds the brief next to the session file", async () => {
     const session = await loadSession(await write({ level: "1-1", tools: ["get_state", "wait"], brief: "brief.md" }));
-    expect(session.settings).toEqual({ level: "1-1", clock: "waits", speed: 1, tools: ["get_state", "wait"], brief: "brief.md", maxTurns: 400 });
+    expect(session.settings).toEqual({ side: "plants", level: "1-1", clock: "waits", speed: 1, tools: ["get_state", "wait"], brief: "brief.md", maxTurns: 400 });
     expect(session.briefPath).toBe(join(folder, "brief.md"));
   });
 
@@ -60,6 +60,15 @@ describe("loadSession", () => {
     await expect(loadSession(await write({ level: "1-1", clock: "waits", tools: ["get_state", "place_plant"], brief: "b.md" }))).rejects.toThrow(
       /must include "wait"/,
     );
+  });
+
+  it("gives each side only its own tools, and the zombie side a real-time game with no seeds", async () => {
+    const zombies = { side: "zombies", level: "1-9", clock: "realtime", tools: ["get_state", "send_zombie", "wait"], brief: "b.md" };
+    expect((await loadSession(await write(zombies))).settings).toMatchObject({ side: "zombies", clock: "realtime", tools: ["get_state", "send_zombie", "wait"] });
+    await expect(loadSession(await write({ ...zombies, tools: ["get_state", "place_plant"] }))).rejects.toThrow(/the zombies' side takes get_state, send_zombie and wait/);
+    await expect(loadSession(await write({ level: "1-9", clock: "realtime", tools: ["send_zombie"], brief: "b.md" }))).rejects.toThrow(/the plants' side takes/);
+    await expect(loadSession(await write({ ...zombies, clock: "waits" }))).rejects.toThrow(/the zombies' side plays in real time/);
+    await expect(loadSession(await write({ ...zombies, seeds: ["peashooter"] }))).rejects.toThrow(/brings no seeds/);
   });
 
   it("takes the seeds to bring and a speed from 1 to 50", async () => {

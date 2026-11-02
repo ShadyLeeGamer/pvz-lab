@@ -1,6 +1,6 @@
 // The game for a chat app: the MCP server starts its own copy the first time a level is started, and
 // closes it with the server. (pnpm play starts the game itself and gives the server its address.)
-import { GameClient, type Action, type Control, type Game, type GameState, type Result } from "../game-client.ts";
+import { GameClient, type Action, type Control, type Game, type GameState, type Result, type View } from "../game-client.ts";
 import { launchGame, readGameConfig, type RunningGame } from "../game-process.ts";
 
 // What start_level needs when the server runs its own game.
@@ -51,8 +51,8 @@ export class OwnGame implements Game, GameStarter {
     return this.client;
   }
 
-  state(): Promise<GameState> {
-    return this.game.state();
+  state(view?: View): Promise<GameState> {
+    return this.game.state(view);
   }
 
   act(action: Action): Promise<Result> {

@@ -1,12 +1,14 @@
 // The MCP server the player uses. MCP messages travel over stdin and stdout, so anything meant for
-// people goes to stderr. It runs in two ways:
+// people goes to stderr. It runs in three ways:
 // - from pnpm play, which starts the game and the level itself and gives the server the game's address;
 // - from a chat app such as Claude Desktop, with a session that offers start_level: the server starts
 //   its own copy of the game at the first start_level, closes it when the app closes the server, and
-//   gives the app the session's instructions and a play_level prompt.
+//   gives the app the session's instructions and a play_level prompt;
+// - for the zombie side of a versus level that's already started, with a session whose side is
+//   "zombies": it gives the app the session's instructions and a play_zombies prompt.
 //
 // Environment:
-//   PVZ_SESSION  the session file: tools, clock, speed and brief (required)
+//   PVZ_SESSION  the session file: side, tools, clock, speed and brief (required)
 //   PVZ_API_URL  the address of a game that's already running, as pnpm play sets it
 //   PVZ_LOG      a file to append every tool call to, one JSON line each (optional)
 import { appendFileSync } from "node:fs";
@@ -19,6 +21,7 @@ import { GameClient } from "../game-client.ts";
 import { loadSession } from "../session.ts";
 import { OwnGame } from "./own-game.ts";
 import { registerTools } from "./tools.ts";
+import { registerZombieTools } from "./zombie-tools.ts";
 
 const { PVZ_SESSION, PVZ_API_URL, PVZ_LOG } = process.env;
 if (!PVZ_SESSION) {
@@ -27,26 +30,41 @@ if (!PVZ_SESSION) {
 }
 
 const session = await loadSession(PVZ_SESSION);
-const { tools, clock, speed } = session.settings;
+const { side, tools, clock, speed } = session.settings;
 const chat = tools.includes("start_level");
 if (!PVZ_API_URL && !chat) {
-  console.error("pvz MCP server: this session plays a set level, which pnpm play starts. For a chat app, use a session with start_level, e.g. sessions/chat.json");
+  console.error(
+    "pvz MCP server: this session plays a level that's already started (pnpm play starts it), so set PVZ_API_URL to the game's address. " +
+      "For a chat app, use a session with start_level, e.g. sessions/chat.json",
+  );
   process.exit(1);
 }
 
 const ownGame = PVZ_API_URL ? undefined : new OwnGame();
 const game = ownGame ?? new GameClient(PVZ_API_URL!);
 const brief = writeBrief(await readFile(session.briefPath, "utf8"), session.settings);
-// pnpm play hands the player the brief itself (as its system prompt), so only chat sessions send it here.
-const server = new McpServer({ name: "pvz", version: "0.1.0" }, chat ? { instructions: brief } : undefined);
+// pnpm play hands the plants' player the brief itself (as its system prompt), so only chat sessions
+// and the zombie side send it here.
+const sendsBrief = chat || side === "zombies";
+const server = new McpServer({ name: "pvz", version: "0.1.0" }, sendsBrief ? { instructions: brief } : undefined);
 
-registerTools(server, tools, {
+const context = {
   game,
   starter: ownGame,
   clock,
   speed,
-  log: PVZ_LOG ? (entry) => appendFileSync(PVZ_LOG, `${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`) : undefined,
-});
+  log: PVZ_LOG ? (entry: Record<string, unknown>) => appendFileSync(PVZ_LOG, `${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`) : undefined,
+};
+if (side === "zombies") registerZombieTools(server, tools, context);
+else registerTools(server, tools, context);
+
+if (side === "zombies") {
+  server.registerPrompt(
+    "play_zombies",
+    { title: "Play the zombies", description: "Plays the zombie side of the versus level being played, to the end." },
+    () => ({ messages: [{ role: "user", content: { type: "text", text: `${brief}\nPlay the zombies until the level is over.` } }] }),
+  );
+}
 
 if (chat) {
   server.registerPrompt(
@@ -72,4 +90,4 @@ process.on("SIGTERM", shutDown);
 process.on("SIGINT", shutDown);
 
 await server.connect(new StdioServerTransport());
-console.error(`pvz MCP server: tools ${tools.join(", ")}; ${PVZ_API_URL ? `game at ${PVZ_API_URL}` : "starts its own game at the first start_level"}`);
+console.error(`pvz MCP server: ${side}; tools ${tools.join(", ")}; ${PVZ_API_URL ? `game at ${PVZ_API_URL}` : "starts its own game at the first start_level"}`);

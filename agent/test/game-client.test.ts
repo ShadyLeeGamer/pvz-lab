@@ -5,17 +5,20 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import { BUSY_ATTEMPTS, GameClient } from "../src/game-client.ts";
-import { savedReply, type SavedReply } from "./fixtures/fixture.ts";
+import { fixture, savedReply, type SavedReply } from "./fixtures/fixture.ts";
 
 const busy: SavedReply = {
   status: 503,
   body: { error: { code: "busy", message: "the game didn't pick the request up within 2 seconds" } },
 };
 
-// Answers each request with the next answer in the list (the last one repeats) and counts them.
-async function standInGame(answers: SavedReply[]): Promise<{ client: GameClient; requests: () => number; close: () => void }> {
+// Answers each request with the next answer in the list (the last one repeats), and counts them and
+// records their paths.
+async function standInGame(answers: SavedReply[]): Promise<{ client: GameClient; requests: () => number; paths: string[]; close: () => void }> {
   let count = 0;
+  const paths: string[] = [];
   const server = createServer((request, response) => {
+    paths.push(request.url ?? "");
     request.resume();
     request.on("end", () => {
       const answer = answers[Math.min(count, answers.length - 1)]!;
@@ -29,6 +32,7 @@ async function standInGame(answers: SavedReply[]): Promise<{ client: GameClient;
   return {
     client: new GameClient(`http://127.0.0.1:${port}`),
     requests: () => count,
+    paths,
     close: () => {
       server.closeAllConnections();
       server.close();
@@ -51,6 +55,14 @@ describe("GameClient", () => {
     game.close();
     expect(result).toMatchObject({ ok: false, status: 503, error: { code: "busy" } });
     expect(game.requests()).toBe(BUSY_ATTEMPTS);
+  });
+
+  it("reads the zombie seat's view when asked, with the versus section it adds", async () => {
+    const game = await standInGame([{ status: 200, body: fixture("1-9-versus-warning") }]);
+    const state = await game.client.state("zombies");
+    game.close();
+    expect(game.paths).toEqual(["/state?view=zombies"]);
+    expect(state.versus).toMatchObject({ points: 7, wave: 10, held: [{ zombie: "conehead_zombie", row: 1 }] });
   });
 
   it("never resends a request the game refused", async () => {

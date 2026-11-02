@@ -1,14 +1,24 @@
-// A play session's settings: the level, how game time behaves, and which tools Claude gets.
+// A play session's settings: the side, the level, how game time behaves, and which tools Claude gets.
 // Each session is a small JSON file in ../sessions, saved next to every run's log.
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
 
-export const TOOL_NAMES = ["start_level", "get_state", "place_plant", "dig_up", "collect_sun", "wait"] as const;
+export const TOOL_NAMES = ["start_level", "get_state", "place_plant", "dig_up", "collect_sun", "wait", "send_zombie"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 export const MAX_SPEED = 50; // the game's fastest speed (kMaxSpeed in Clock.h)
 
+export const SIDES = ["plants", "zombies"] as const;
+export type Side = (typeof SIDES)[number];
+// The tools each side may be given: get_state and wait serve both, with each side's own view.
+export const SIDE_TOOLS: Record<Side, readonly ToolName[]> = {
+  plants: ["start_level", "get_state", "place_plant", "dig_up", "collect_sun", "wait"],
+  zombies: ["get_state", "send_zombie", "wait"],
+};
+
 export const Session = z.object({
+  // The side the player plays: the plants, or in a versus level the zombies.
+  side: z.enum(SIDES).default("plants"),
   // Adventure level, as a number (1-50) or a name ("1-1"). A session for chat apps leaves it out (and
   // seeds too) and offers start_level instead, so the player starts the levels.
   level: z.union([z.number().int().min(1).max(50), z.string().regex(/^[1-5]-([1-9]|10)$/)]).optional(),
@@ -41,6 +51,16 @@ export const Session = z.object({
   .refine((session) => session.tools.includes("start_level") || session.level !== undefined, {
     message: 'set "level", or offer "start_level" so the player can pick one',
     path: ["level"],
+  })
+  .refine((session) => session.tools.every((tool) => SIDE_TOOLS[session.side].includes(tool)), {
+    message: 'the plants\' side takes start_level, get_state, place_plant, dig_up, collect_sun and wait; the zombies\' side takes get_state, send_zombie and wait',
+    path: ["tools"],
+  })
+  // The zombie side never starts a level or picks its seeds, and it can't hold the clock: the plants
+  // play on while it thinks.
+  .refine((session) => session.side === "plants" || (session.clock === "realtime" && session.seeds === undefined), {
+    message: 'the zombies\' side plays in real time and brings no seeds: set "clock": "realtime" and leave out "seeds"',
+    path: ["clock"],
   });
 export type Session = z.infer<typeof Session>;
 

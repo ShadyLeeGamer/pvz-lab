@@ -5,50 +5,12 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
-import type { Action, Control, Game, GameState, Result } from "../src/game-client.ts";
+import type { Game } from "../src/game-client.ts";
 import type { GameStarter } from "../src/mcp/own-game.ts";
-import { normalizePlantName, registerTools, streetLine } from "../src/mcp/tools.ts";
+import { normalizeName, registerTools, streetLine } from "../src/mcp/tools.ts";
 import type { ToolName } from "../src/session.ts";
 import { fixture, reply, savedReply } from "./fixtures/fixture.ts";
-
-// Hands out the given states in order (the last one repeats), answers with the game's replies, and
-// records what it's asked to do.
-class StandInGame implements Game {
-  readonly actions: Action[] = [];
-  readonly controls: Control[] = [];
-  readonly replies: Record<Action["type"], Result> = {
-    placePlant: reply("placed"),
-    digUp: reply("dug-up"),
-    collectSun: reply("suns-collected"),
-    collectAward: reply("award-collected"),
-  };
-  readonly controlReplies: Partial<Record<Control["type"], Result>> = {
-    step: reply("stepped"),
-    run: reply("ran"),
-    startLevel: reply("level-started"),
-  };
-  private readonly states: GameState[];
-
-  constructor(...states: GameState[]) {
-    this.states = states;
-  }
-
-  async state(): Promise<GameState> {
-    return this.states.length > 1 ? this.states.shift()! : this.states[0]!;
-  }
-
-  async act(action: Action): Promise<Result> {
-    this.actions.push(action);
-    return this.replies[action.type];
-  }
-
-  async control(command: Control): Promise<Result> {
-    this.controls.push(command);
-    const answer = this.controlReplies[command.type];
-    if (!answer) throw new Error(`the stand-in has no recorded reply to ${command.type}`);
-    return answer;
-  }
-}
+import { StandInGame } from "./stand-in-game.ts";
 
 // Stands in for the server's own game in a chat app: it only records that it was started.
 class StandInStarter implements GameStarter {
@@ -315,10 +277,10 @@ describe("streetLine", () => {
   });
 });
 
-describe("normalizePlantName", () => {
+describe("normalizeName", () => {
   it("accepts the ways people write plant names", () => {
-    expect(normalizePlantName("Wall-nut")).toBe("wall_nut");
-    expect(normalizePlantName("  cherry bomb ")).toBe("cherry_bomb");
-    expect(normalizePlantName("snow_pea")).toBe("snow_pea");
+    expect(normalizeName("Wall-nut")).toBe("wall_nut");
+    expect(normalizeName("  cherry bomb ")).toBe("cherry_bomb");
+    expect(normalizeName("snow_pea")).toBe("snow_pea");
   });
 });

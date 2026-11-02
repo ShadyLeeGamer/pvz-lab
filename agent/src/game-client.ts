@@ -74,18 +74,31 @@ const Board = z.object({
   }),
 });
 
-// The player view only: this program never asks for hidden information.
+// In a versus level, the zombie side's points and what it may send; the zombie seat's view adds the
+// zombies it's holding and any held zombie's points given back.
+const Versus = z.object({
+  points: z.number().int(),
+  wave: z.number().int(),
+  types: z.array(z.object({ zombie: z.string(), cost: z.number().int(), firstWave: z.number().int(), ready: z.boolean() })),
+  held: z.array(z.object({ zombie: z.string(), row: z.number().int(), col: z.number().int().optional() })).optional(),
+  refunds: z.array(z.object({ zombie: z.string(), row: z.number().int(), reason: z.string() })).optional(),
+});
+
+// A seat's view only, the player's or the zombie seat's: this program never asks for the full view.
 export const GameState = z.object({
-  view: z.literal("player"),
+  view: z.enum(["player", "zombies"]),
   appTicks: z.number().int(),
   scene: z.string(),
   clock: z.object({ state: z.string(), speed: z.number().int() }),
   dialogOpen: z.boolean(),
   minimized: z.boolean(),
   board: Board.nullable(),
+  versus: Versus.optional(),
 });
 export type GameState = z.infer<typeof GameState>;
 export type BoardState = NonNullable<GameState["board"]>;
+export type VersusState = NonNullable<GameState["versus"]>;
+export type View = GameState["view"];
 
 const ApiError = z.object({
   code: z.string(),
@@ -107,6 +120,10 @@ const Success = z.object({
   level: z.number().int().optional(),
   levelName: z.string().optional(),
   zombies: z.array(z.string()).optional(),
+  // sendZombie: the zombie that walked on (none while it's held), and the points left.
+  zombie: z.object({ id: z.number().int(), type: z.string(), row: z.number().int() }).optional(),
+  held: z.literal(true).optional(),
+  points: z.number().int().optional(),
 });
 export type Success = z.infer<typeof Success>;
 
@@ -122,7 +139,8 @@ export type Action =
   | { type: "placePlant"; slot: number; col: number; row: number }
   | { type: "digUp"; col: number; row: number; plant?: string }
   | { type: "collectSun"; id?: number }
-  | { type: "collectAward" };
+  | { type: "collectAward" }
+  | { type: "sendZombie"; zombie: string; row: number; col?: number };
 
 export type Control =
   | { type: "freeze" }
@@ -137,7 +155,7 @@ export const BUSY_ATTEMPTS = 3;
 
 // What the rest of the program needs from the game. GameClient is the real one.
 export interface Game {
-  state(): Promise<GameState>;
+  state(view?: View): Promise<GameState>; // the player's view unless the zombie seat's is asked for
   act(action: Action): Promise<Result>;
   control(command: Control): Promise<Result>;
 }
@@ -149,8 +167,8 @@ export class GameClient implements Game {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
-  async state(): Promise<GameState> {
-    const response = await this.request("/state?view=player");
+  async state(view: View = "player"): Promise<GameState> {
+    const response = await this.request(`/state?view=${view}`);
     if (!response.ok) throw new Error(`GET /state answered ${response.status}: ${await response.text()}`);
     return GameState.parse(await response.json());
   }

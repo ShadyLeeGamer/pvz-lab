@@ -1,0 +1,1010 @@
+{
+  "apiVersion": 1,
+  "view": "zombies",
+  "appTicks": 10603,
+  "scene": "playing",
+  "mode": "adventure",
+  "modeId": 0,
+  "clock": {
+    "state": "frozen",
+    "speed": 50
+  },
+  "dialogOpen": false,
+  "minimized": false,
+  "board": {
+    "level": 9,
+    "levelName": "1-9",
+    "stage": "day",
+    "paused": false,
+    "gameTicks": 9601,
+    "boardTicks": 10462,
+    "result": "playing",
+    "sun": 50,
+    "sunSpendable": 50,
+    "shovel": true,
+    "seedPackets": [
+      {
+        "slot": 0,
+        "plant": "peashooter",
+        "plantId": 0,
+        "cost": 100,
+        "ready": false,
+        "held": false,
+        "recharge": 1,
+        "plantableTiles": [
+          {
+            "col": 0,
+            "row": 2
+          },
+          {
+            "col": 1,
+            "row": 2
+          },
+          {
+            "col": 2,
+            "row": 2
+          },
+          {
+            "col": 3,
+            "row": 2
+          },
+          {
+            "col": 4,
+            "row": 2
+          },
+          {
+            "col": 5,
+            "row": 2
+          },
+          {
+            "col": 6,
+            "row": 2
+          },
+          {
+            "col": 7,
+            "row": 2
+          },
+          {
+            "col": 8,
+            "row": 2
+          },
+          {
+            "col": 0,
+            "row": 3
+          },
+          {
+            "col": 1,
+            "row": 3
+          },
+          {
+            "col": 2,
+            "row": 3
+          },
+          {
+            "col": 3,
+            "row": 3
+          },
+          {
+            "col": 4,
+            "row": 3
+          },
+          {
+            "col": 5,
+            "row": 3
+          },
+          {
+            "col": 6,
+            "row": 3
+          },
+          {
+            "col": 7,
+            "row": 3
+          },
+          {
+            "col": 8,
+            "row": 3
+          },
+          {
+            "col": 0,
+            "row": 4
+          },
+          {
+            "col": 1,
+            "row": 4
+          },
+          {
+            "col": 2,
+            "row": 4
+          },
+          {
+            "col": 3,
+            "row": 4
+          },
+          {
+            "col": 4,
+            "row": 4
+          },
+          {
+            "col": 5,
+            "row": 4
+          },
+          {
+            "col": 6,
+            "row": 4
+          },
+          {
+            "col": 7,
+            "row": 4
+          },
+          {
+            "col": 8,
+            "row": 4
+          }
+        ]
+      },
+      {
+        "slot": 1,
+        "plant": "sunflower",
+        "plantId": 1,
+        "cost": 50,
+        "ready": false,
+        "held": false,
+        "recharge": 0.27,
+        "plantableTiles": [
+          {
+            "col": 0,
+            "row": 2
+          },
+          {
+            "col": 1,
+            "row": 2
+          },
+          {
+            "col": 2,
+            "row": 2
+          },
+          {
+            "col": 3,
+            "row": 2
+          },
+          {
+            "col": 4,
+            "row": 2
+          },
+          {
+            "col": 5,
+            "row": 2
+          },
+          {
+            "col": 6,
+            "row": 2
+          },
+          {
+            "col": 7,
+            "row": 2
+          },
+          {
+            "col": 8,
+            "row": 2
+          },
+          {
+            "col": 0,
+            "row": 3
+          },
+          {
+            "col": 1,
+            "row": 3
+          },
+          {
+            "col": 2,
+            "row": 3
+          },
+          {
+            "col": 3,
+            "row": 3
+          },
+          {
+            "col": 4,
+            "row": 3
+          },
+          {
+            "col": 5,
+            "row": 3
+          },
+          {
+            "col": 6,
+            "row": 3
+          },
+          {
+            "col": 7,
+            "row": 3
+          },
+          {
+            "col": 8,
+            "row": 3
+          },
+          {
+            "col": 0,
+            "row": 4
+          },
+          {
+            "col": 1,
+            "row": 4
+          },
+          {
+            "col": 2,
+            "row": 4
+          },
+          {
+            "col": 3,
+            "row": 4
+          },
+          {
+            "col": 4,
+            "row": 4
+          },
+          {
+            "col": 5,
+            "row": 4
+          },
+          {
+            "col": 6,
+            "row": 4
+          },
+          {
+            "col": 7,
+            "row": 4
+          },
+          {
+            "col": 8,
+            "row": 4
+          }
+        ]
+      },
+      {
+        "slot": 2,
+        "plant": "cherry_bomb",
+        "plantId": 2,
+        "cost": 150,
+        "ready": false,
+        "held": false,
+        "recharge": 1,
+        "plantableTiles": [
+          {
+            "col": 0,
+            "row": 2
+          },
+          {
+            "col": 1,
+            "row": 2
+          },
+          {
+            "col": 2,
+            "row": 2
+          },
+          {
+            "col": 3,
+            "row": 2
+          },
+          {
+            "col": 4,
+            "row": 2
+          },
+          {
+            "col": 5,
+            "row": 2
+          },
+          {
+            "col": 6,
+            "row": 2
+          },
+          {
+            "col": 7,
+            "row": 2
+          },
+          {
+            "col": 8,
+            "row": 2
+          },
+          {
+            "col": 0,
+            "row": 3
+          },
+          {
+            "col": 1,
+            "row": 3
+          },
+          {
+            "col": 2,
+            "row": 3
+          },
+          {
+            "col": 3,
+            "row": 3
+          },
+          {
+            "col": 4,
+            "row": 3
+          },
+          {
+            "col": 5,
+            "row": 3
+          },
+          {
+            "col": 6,
+            "row": 3
+          },
+          {
+            "col": 7,
+            "row": 3
+          },
+          {
+            "col": 8,
+            "row": 3
+          },
+          {
+            "col": 0,
+            "row": 4
+          },
+          {
+            "col": 1,
+            "row": 4
+          },
+          {
+            "col": 2,
+            "row": 4
+          },
+          {
+            "col": 3,
+            "row": 4
+          },
+          {
+            "col": 4,
+            "row": 4
+          },
+          {
+            "col": 5,
+            "row": 4
+          },
+          {
+            "col": 6,
+            "row": 4
+          },
+          {
+            "col": 7,
+            "row": 4
+          },
+          {
+            "col": 8,
+            "row": 4
+          }
+        ]
+      },
+      {
+        "slot": 3,
+        "plant": "wall_nut",
+        "plantId": 3,
+        "cost": 50,
+        "ready": false,
+        "held": false,
+        "recharge": 0.83,
+        "plantableTiles": [
+          {
+            "col": 0,
+            "row": 2
+          },
+          {
+            "col": 1,
+            "row": 2
+          },
+          {
+            "col": 2,
+            "row": 2
+          },
+          {
+            "col": 3,
+            "row": 2
+          },
+          {
+            "col": 4,
+            "row": 2
+          },
+          {
+            "col": 5,
+            "row": 2
+          },
+          {
+            "col": 6,
+            "row": 2
+          },
+          {
+            "col": 7,
+            "row": 2
+          },
+          {
+            "col": 8,
+            "row": 2
+          },
+          {
+            "col": 0,
+            "row": 3
+          },
+          {
+            "col": 1,
+            "row": 3
+          },
+          {
+            "col": 2,
+            "row": 3
+          },
+          {
+            "col": 3,
+            "row": 3
+          },
+          {
+            "col": 4,
+            "row": 3
+          },
+          {
+            "col": 5,
+            "row": 3
+          },
+          {
+            "col": 6,
+            "row": 3
+          },
+          {
+            "col": 7,
+            "row": 3
+          },
+          {
+            "col": 8,
+            "row": 3
+          },
+          {
+            "col": 0,
+            "row": 4
+          },
+          {
+            "col": 1,
+            "row": 4
+          },
+          {
+            "col": 2,
+            "row": 4
+          },
+          {
+            "col": 3,
+            "row": 4
+          },
+          {
+            "col": 4,
+            "row": 4
+          },
+          {
+            "col": 5,
+            "row": 4
+          },
+          {
+            "col": 6,
+            "row": 4
+          },
+          {
+            "col": 7,
+            "row": 4
+          },
+          {
+            "col": 8,
+            "row": 4
+          }
+        ]
+      },
+      {
+        "slot": 4,
+        "plant": "potato_mine",
+        "plantId": 4,
+        "cost": 25,
+        "ready": false,
+        "held": false,
+        "recharge": 0.43,
+        "plantableTiles": [
+          {
+            "col": 0,
+            "row": 2
+          },
+          {
+            "col": 1,
+            "row": 2
+          },
+          {
+            "col": 2,
+            "row": 2
+          },
+          {
+            "col": 3,
+            "row": 2
+          },
+          {
+            "col": 4,
+            "row": 2
+          },
+          {
+            "col": 5,
+            "row": 2
+          },
+          {
+            "col": 6,
+            "row": 2
+          },
+          {
+            "col": 7,
+            "row": 2
+          },
+          {
+            "col": 8,
+            "row": 2
+          },
+          {
+            "col": 0,
+            "row": 3
+          },
+          {
+            "col": 1,
+            "row": 3
+          },
+          {
+            "col": 2,
+            "row": 3
+          },
+          {
+            "col": 3,
+            "row": 3
+          },
+          {
+            "col": 4,
+            "row": 3
+          },
+          {
+            "col": 5,
+            "row": 3
+          },
+          {
+            "col": 6,
+            "row": 3
+          },
+          {
+            "col": 7,
+            "row": 3
+          },
+          {
+            "col": 8,
+            "row": 3
+          },
+          {
+            "col": 0,
+            "row": 4
+          },
+          {
+            "col": 1,
+            "row": 4
+          },
+          {
+            "col": 2,
+            "row": 4
+          },
+          {
+            "col": 3,
+            "row": 4
+          },
+          {
+            "col": 4,
+            "row": 4
+          },
+          {
+            "col": 5,
+            "row": 4
+          },
+          {
+            "col": 6,
+            "row": 4
+          },
+          {
+            "col": 7,
+            "row": 4
+          },
+          {
+            "col": 8,
+            "row": 4
+          }
+        ]
+      },
+      {
+        "slot": 5,
+        "plant": "snow_pea",
+        "plantId": 5,
+        "cost": 175,
+        "ready": false,
+        "held": false,
+        "recharge": 1,
+        "plantableTiles": [
+          {
+            "col": 0,
+            "row": 2
+          },
+          {
+            "col": 1,
+            "row": 2
+          },
+          {
+            "col": 2,
+            "row": 2
+          },
+          {
+            "col": 3,
+            "row": 2
+          },
+          {
+            "col": 4,
+            "row": 2
+          },
+          {
+            "col": 5,
+            "row": 2
+          },
+          {
+            "col": 6,
+            "row": 2
+          },
+          {
+            "col": 7,
+            "row": 2
+          },
+          {
+            "col": 8,
+            "row": 2
+          },
+          {
+            "col": 0,
+            "row": 3
+          },
+          {
+            "col": 1,
+            "row": 3
+          },
+          {
+            "col": 2,
+            "row": 3
+          },
+          {
+            "col": 3,
+            "row": 3
+          },
+          {
+            "col": 4,
+            "row": 3
+          },
+          {
+            "col": 5,
+            "row": 3
+          },
+          {
+            "col": 6,
+            "row": 3
+          },
+          {
+            "col": 7,
+            "row": 3
+          },
+          {
+            "col": 8,
+            "row": 3
+          },
+          {
+            "col": 0,
+            "row": 4
+          },
+          {
+            "col": 1,
+            "row": 4
+          },
+          {
+            "col": 2,
+            "row": 4
+          },
+          {
+            "col": 3,
+            "row": 4
+          },
+          {
+            "col": 4,
+            "row": 4
+          },
+          {
+            "col": 5,
+            "row": 4
+          },
+          {
+            "col": 6,
+            "row": 4
+          },
+          {
+            "col": 7,
+            "row": 4
+          },
+          {
+            "col": 8,
+            "row": 4
+          }
+        ]
+      }
+    ],
+    "lawn": {
+      "rows": [
+        "grass",
+        "grass",
+        "grass",
+        "grass",
+        "grass"
+      ],
+      "items": [],
+      "ice": []
+    },
+    "plants": [
+      {
+        "id": 65601536,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 0,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 65667073,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 1,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 65732610,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 2,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 65798147,
+        "type": "potato_mine",
+        "typeId": 4,
+        "col": 3,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false,
+        "state": "armed"
+      },
+      {
+        "id": 65863684,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 4,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 65929221,
+        "type": "wall_nut",
+        "typeId": 3,
+        "col": 5,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false,
+        "damage": "none"
+      },
+      {
+        "id": 65994758,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 6,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66060295,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 7,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66125832,
+        "type": "potato_mine",
+        "typeId": 4,
+        "col": 8,
+        "row": 0,
+        "layer": "normal",
+        "asleep": false,
+        "state": "armed"
+      },
+      {
+        "id": 66191369,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 0,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66256906,
+        "type": "peashooter",
+        "typeId": 0,
+        "col": 1,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66322443,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 2,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66387980,
+        "type": "wall_nut",
+        "typeId": 3,
+        "col": 3,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false,
+        "damage": "none"
+      },
+      {
+        "id": 66453517,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 4,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66519054,
+        "type": "peashooter",
+        "typeId": 0,
+        "col": 5,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66584591,
+        "type": "potato_mine",
+        "typeId": 4,
+        "col": 6,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false,
+        "state": "arming"
+      },
+      {
+        "id": 66650128,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 7,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false
+      },
+      {
+        "id": 66715665,
+        "type": "sunflower",
+        "typeId": 1,
+        "col": 8,
+        "row": 1,
+        "layer": "normal",
+        "asleep": false
+      }
+    ],
+    "zombies": [
+      {
+        "id": 66256904,
+        "type": "conehead_zombie",
+        "typeId": 2,
+        "row": 0,
+        "x": 814,
+        "y": 50,
+        "onScreen": false,
+        "eating": false,
+        "slowed": false,
+        "frozen": false,
+        "buttered": false,
+        "hypnotized": false,
+        "inPool": false,
+        "flying": false,
+        "underground": false,
+        "hasArm": true,
+        "hasHead": true,
+        "helm": {
+          "type": "cone",
+          "damage": "none"
+        },
+        "shield": null
+      }
+    ],
+    "suns": [],
+    "award": null,
+    "mowers": [
+      {
+        "row": 0,
+        "kind": "lawn_mower",
+        "state": "ready"
+      },
+      {
+        "row": 1,
+        "kind": "lawn_mower",
+        "state": "ready"
+      },
+      {
+        "row": 3,
+        "kind": "lawn_mower",
+        "state": "ready"
+      },
+      {
+        "row": 4,
+        "kind": "lawn_mower",
+        "state": "ready"
+      }
+    ],
+    "progress": {
+      "wave": 4,
+      "totalWaves": 20,
+      "meter": 0.13,
+      "hugeWaveIncoming": false
+    }
+  },
+  "versus": {
+    "points": 0,
+    "wave": 4,
+    "types": [
+      {
+        "zombie": "zombie",
+        "cost": 1,
+        "firstWave": 1,
+        "ready": false
+      },
+      {
+        "zombie": "conehead_zombie",
+        "cost": 2,
+        "firstWave": 1,
+        "ready": false
+      },
+      {
+        "zombie": "pole_vaulting_zombie",
+        "cost": 2,
+        "firstWave": 5,
+        "ready": false
+      },
+      {
+        "zombie": "buckethead_zombie",
+        "cost": 4,
+        "firstWave": 1,
+        "ready": false
+      }
+    ],
+    "held": [],
+    "refunds": []
+  }
+}

@@ -158,5 +158,46 @@
         "message": "Crazy Dave is talking; levels that start with him aren't supported yet"
       }
     }
+  },
+  "not-versus": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "not_versus",
+        "message": "this level isn't being played in versus"
+      }
+    }
+  },
+  "zombie-sent": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 2803,
+      "zombie": {
+        "id": 66191368,
+        "type": "zombie",
+        "row": 2
+      },
+      "points": 0
+    }
+  },
+  "zombie-refused": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "cant_send_zombie",
+        "message": "zombie costs 1 and there are 0 points left to spend on wave 1",
+        "reason": "too_few_points"
+      }
+    }
+  },
+  "zombie-held": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 27203,
+      "held": true,
+      "points": 7
+    }
   }
 }

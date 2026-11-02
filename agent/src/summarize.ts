@@ -1,6 +1,7 @@
 // Turns the game state into the short text Claude reads: a map of the lawn, then the details as lists.
 // It only ever gets the player view, so nothing hidden from a player can reach Claude.
 import type { BoardState, GameState } from "./game-client.ts";
+import type { Side } from "./session.ts";
 
 type Plant = BoardState["plants"][number];
 type Zombie = BoardState["zombies"][number];
@@ -47,7 +48,7 @@ function topPlantAt(board: BoardState, col: number, row: number): Plant | undefi
     .sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer))[0];
 }
 
-function packetLine(packet: SeedPacket, sunToSpend: number): string {
+export function packetLine(packet: SeedPacket, sunToSpend: number): string {
   const shortBy = packet.cost - sunToSpend;
   let status: string;
   if (packet.ready) status = packet.plantableTiles.length > 0 ? "Ready." : "Ready, but there's nowhere it can go right now.";
@@ -57,7 +58,7 @@ function packetLine(packet: SeedPacket, sunToSpend: number): string {
   return `- ${packet.plant}: ${packet.cost} sun. ${status}`;
 }
 
-function lawnLines(board: BoardState, symbols: Map<string, string>): string[] {
+export function lawnLines(board: BoardState, symbols: Map<string, string>): string[] {
   const used = new Set<string>();
   const lines = [`       ${Array.from({ length: COLUMNS }, (_, col) => col).join(" ")} +`];
   board.lawn.rows.forEach((terrain, row) => {
@@ -99,9 +100,11 @@ function lawnLines(board: BoardState, symbols: Map<string, string>): string[] {
   return lines;
 }
 
-function zombieLine(zombie: Zombie, board: BoardState): string {
+// Told to the side that reads it: the plants' house is "your house" only to the plants.
+export function zombieLine(zombie: Zombie, board: BoardState, side: Side = "plants"): string {
   const col = zombieColumn(zombie.x);
-  const where = col >= COLUMNS ? "walking in from the right" : col < 0 ? "at your house" : `at column ${col}`;
+  const house = side === "plants" ? "your house" : "the plants' house";
+  const where = col >= COLUMNS ? "walking in from the right" : col < 0 ? `at ${house}` : `at column ${col}`;
   const notes: string[] = [];
   if (zombie.eating) {
     const plant = topPlantAt(board, col, zombie.row);
@@ -115,7 +118,7 @@ function zombieLine(zombie: Zombie, board: BoardState): string {
   if (zombie.slowed) notes.push("slowed");
   if (zombie.frozen) notes.push("frozen");
   if (zombie.buttered) notes.push("buttered");
-  if (zombie.hypnotized) notes.push("hypnotized, fighting for you");
+  if (zombie.hypnotized) notes.push(side === "plants" ? "hypnotized, fighting for you" : "hypnotized, fighting for the plants");
   if (zombie.flying) notes.push("flying");
   if (zombie.underground) notes.push("underground");
   return `- row ${zombie.row}: ${zombie.type} ${where}${notes.length > 0 ? `, ${notes.join(", ")}` : ""}`;

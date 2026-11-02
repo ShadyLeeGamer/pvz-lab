@@ -81,11 +81,36 @@ claude mcp add pvz -s user -e PVZ_SESSION=C:/path/to/pvz-lab/agent/sessions/chat
 
 Then ask, say, "play level 2-7". The game window opens at the first level. If the app is force-closed, the game still closes, but its temporary save folder stays in your temp folder.
 
+## Playing the zombies in a versus level
+
+A level started with `"versus": true` (see `../docs/api.md`) hands its zombie side to a player. The MCP server plays that side with a session whose `side` is `"zombies"`, such as `sessions/1-9-zombies.json`:
+- Its tools are `get_state`, `send_zombie` and `wait`, and they show the zombie side's own view:
+  - its points, and the zombies it can send, with their cost, first wave and whether they're ready;
+  - the plants' sun and seed packets;
+  - the lawn, each row's defence, and the zombies on it, including its own still walking in and any held for a huge wave.
+- `send_zombie` takes a zombie, a row and, for a bungee, the column it drops onto. The game refuses what its rules don't allow and says why.
+- `wait` ends early when a wave pays the zombie side or the level ends.
+- The zombie side plays in real time, so the session's `clock` must be `realtime`. Someone else starts the level and runs the clock, and `PVZ_API_URL` points the server at that game.
+- The session's brief reaches the app as the server's instructions, and there's a `play_zombies` prompt.
+
+For example, to play the plants yourself against Claude Code on the zombies:
+1. Start the game, then start 1-9 in versus, pick seeds and run the clock (`../docs/api.md` has the requests).
+2. Save this as `zombies-mcp.json`, with your own path:
+   ```json
+   { "mcpServers": { "pvz-zombies": {
+     "command": "node",
+     "args": ["C:/path/to/pvz-lab/agent/src/mcp/server.ts"],
+     "env": { "PVZ_SESSION": "C:/path/to/pvz-lab/agent/sessions/1-9-zombies.json", "PVZ_API_URL": "http://127.0.0.1:7310" }
+   } } }
+   ```
+3. Run `claude --strict-mcp-config --mcp-config zombies-mcp.json --allowedTools "mcp__pvz-zombies__*"`, so it has only the zombie side's tools and never stops to ask before using them, and ask it to play the zombies (or run the `play_zombies` prompt).
+
 ## Tests
 
 - Unit tests check:
   - the summary, against real game states saved in `test/fixtures`
   - the MCP tools, through a real MCP client, against the game's own replies (also in `test/fixtures`; refresh both with `pnpm fixtures:capture`)
+  - the zombie side's summary and tools, against the zombie side's real views of versus levels (`pnpm fixtures:capture versus` refreshes just those)
   - the session files, the client's handling of a busy game, and the lines `pnpm play` prints (against events from a real run)
 - End-to-end tests play real levels.
   - They start 1-1 from the title screen, plant, collect sun, and win it at high speed.
@@ -93,4 +118,5 @@ Then ask, say, "play level 2-7". The game window opens at the first level. If th
   - They dig plants up with the shovel, including a pumpkin, the plant inside it and the flower pot under them on the roof, in the order the game allows.
   - Another drives the MCP server against the game, the way Claude Code does.
   - Another runs the server the way a chat app does: it starts its own game at `start_level`, asks for seeds with their costs, and closes the game when the app closes the server.
-  - A full run takes about 40 seconds. Set `PVZ_E2E_MUTE=1` in `.env` to run the games without sound.
+  - Others play versus levels: the zombie side's points and sends through the API, and the zombies of 1-2 through the MCP server.
+  - A full run takes about two minutes. Set `PVZ_E2E_MUTE=1` in `.env` to run the games without sound.

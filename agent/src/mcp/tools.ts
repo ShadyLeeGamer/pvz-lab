@@ -21,18 +21,19 @@ const NO_GAME_YET = "No level is being played yet. Start one with start_level.";
 export const MAX_WAIT_SECONDS = 30;
 const TICKS_PER_SECOND = 100;
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function reply(text: string, isError = false): CallToolResult {
+export function reply(text: string, isError = false): CallToolResult {
   return isError ? { content: [{ type: "text", text }], isError: true } : { content: [{ type: "text", text }] };
 }
 
-// Names the way people write them: "Wall-nut", "wall nut" and "wall_nut" all mean the game's wall_nut.
-export function normalizePlantName(name: string): string {
+// Names the way people write them: "Wall-nut", "wall nut" and "wall_nut" all mean the game's wall_nut,
+// and "Conehead Zombie" the game's conehead_zombie.
+export function normalizeName(name: string): string {
   return name.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
-function levelIsOver(state: GameState): boolean {
+export function levelIsOver(state: GameState): boolean {
   return !state.board || state.board.result !== "playing";
 }
 
@@ -78,7 +79,7 @@ function seedChoice(level: string, error: ApiError, triedSeeds: boolean): string
 }
 
 // Runs a tool, logs the call, and turns anything unexpected into an error Claude can read.
-async function logged(context: ToolContext, tool: ToolName, input: unknown, handler: () => Promise<CallToolResult>): Promise<CallToolResult> {
+export async function logged(context: ToolContext, tool: ToolName, input: unknown, handler: () => Promise<CallToolResult>): Promise<CallToolResult> {
   let result: CallToolResult;
   try {
     result = await handler();
@@ -122,7 +123,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
       (input) =>
         logged(context, "start_level", input, async () => {
           await context.starter?.start();
-          const seeds = input.seeds?.map(normalizePlantName);
+          const seeds = input.seeds?.map(normalizeName);
           const result = await game.control({ type: "startLevel", level: input.level, seeds, then: "freeze" });
           if (!result.ok) {
             if (result.error.code === "bad_seeds" && result.error.choices) return reply(seedChoice(input.level, result.error, seeds !== undefined), seeds !== undefined);
@@ -174,7 +175,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
           const { state, levelName } = await look(context);
           if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
           const packets = state.board!.seedPackets;
-          const packet = packets.find((p) => p.plant === normalizePlantName(input.plant));
+          const packet = packets.find((p) => p.plant === normalizeName(input.plant));
           if (!packet) {
             return reply(`You don't have a ${input.plant} seed packet. Your packets: ${packets.map((p) => p.plant).join(", ")}.`, true);
           }
@@ -206,7 +207,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
           if (noGameYet()) return reply(NO_GAME_YET, true);
           const { state, levelName } = await look(context);
           if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
-          const plant = input.plant === undefined ? undefined : normalizePlantName(input.plant);
+          const plant = input.plant === undefined ? undefined : normalizeName(input.plant);
           const result = await game.act({ type: "digUp", col: input.col, row: input.row, plant });
           if (!result.ok) return reply(`Not dug up: ${result.error.message}.`, true);
           const dug = result.reply.plant!;

@@ -2,8 +2,24 @@
 import { readFileSync } from "node:fs";
 import { GameState, parseReply, type Result } from "../../src/game-client.ts";
 
-export type FixtureName = "1-1-start" | "1-1-zombie" | "1-1-won" | "award-screen" | "1-2-start" | "1-8-start" | "1-8-midgame";
+export type FixtureName =
+  | "1-1-start"
+  | "1-1-zombie"
+  | "1-1-won"
+  | "award-screen"
+  | "1-2-start"
+  | "1-8-start"
+  | "1-8-midgame"
+  // The zombie seat's view (view=zombies) of versus levels.
+  | "1-9-versus-start"
+  | "1-9-versus-midgame"
+  | "1-9-versus-warning"
+  | "1-2-versus-lost";
 export type ReplyName =
+  | "zombie-sent"
+  | "zombie-held"
+  | "zombie-refused"
+  | "not-versus"
   | "level-started"
   | "seeds-asked"
   | "crazy-dave"

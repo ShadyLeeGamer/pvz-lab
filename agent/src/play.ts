@@ -14,7 +14,7 @@ import { writeBrief } from "./brief.ts";
 import { describeEvent } from "./claude-events.ts";
 import { GameClient, type GameState } from "./game-client.ts";
 import { launchGame, loadEnv, readGameConfig } from "./game-process.ts";
-import { normalizePlantName, streetLine } from "./mcp/tools.ts";
+import { normalizeName, streetLine } from "./mcp/tools.ts";
 import { loadSession } from "./session.ts";
 
 const SERVER_NAME = "pvz";
@@ -100,7 +100,7 @@ try {
   const client = new GameClient(game.baseUrl);
   console.log(`Starting level ${level}...`);
   // Frozen at first either way: with the realtime clock, game time starts once Claude Code is ready.
-  const seedNames = seeds?.map(normalizePlantName);
+  const seedNames = seeds?.map(normalizeName);
   const started = await client.control({ type: "startLevel", level, seeds: seedNames, then: "freeze" });
   if (!started.ok) {
     const { message, choices, pick } = started.error;

@@ -2,8 +2,9 @@
 // and writes /state (the player view) at interesting moments into this folder. The game's replies
 // to a few requests go into replies.json, so the tests never need to make one up.
 // Run with `pnpm fixtures:capture` (needs agent/.env, like the end-to-end tests). With --replies-only it
-// refreshes replies.json and leaves the saved states, and the tests written against them, alone.
-import { writeFile } from "node:fs/promises";
+// refreshes replies.json and leaves the saved states, and the tests written against them, alone. Naming
+// parts captures only those, e.g. `pnpm fixtures:capture versus`: the parts are "classic" and "versus".
+import { readFile, writeFile } from "node:fs/promises";
 import { launchGame, readGameConfig } from "../../src/game-process.ts";
 
 type Json = any;
@@ -14,8 +15,12 @@ interface Answer {
 }
 
 const repliesOnly = process.argv.includes("--replies-only");
+const parts = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
+const wanted = (part: string) => parts.length === 0 || parts.includes(part);
 const game = await launchGame(readGameConfig());
-const replies: Record<string, Answer> = {};
+// Replies from the parts not captured this time stay as they were.
+const replies: Record<string, Answer> = parts.length === 0 ? {} : JSON.parse(await readFile(new URL("./replies.json", import.meta.url), "utf8"));
+const kept = new Set<string>();
 
 async function send(path: string, body: unknown): Promise<Answer> {
   const response = await fetch(`${game.baseUrl}${path}`, {
@@ -34,11 +39,17 @@ async function post(path: string, body: unknown): Promise<Answer> {
 
 // Keeps the first reply of each kind.
 function keep(name: string, answer: Answer): void {
-  replies[name] ??= answer;
+  if (kept.has(name)) return;
+  kept.add(name);
+  replies[name] = answer;
 }
 
 async function state(): Promise<Json> {
   return (await fetch(`${game.baseUrl}/state`)).json();
+}
+
+async function zombiesView(): Promise<Json> {
+  return (await fetch(`${game.baseUrl}/state?view=zombies`)).json();
 }
 
 async function save(name: string, content: Json): Promise<void> {
@@ -47,30 +58,33 @@ async function save(name: string, content: Json): Promise<void> {
   console.log(`saved ${name}.json`);
 }
 
-// One plain move per step: collect sun, plant whatever is ready on its first free tile.
-async function playStep(): Promise<Json> {
+// One plain move per step: collect sun, plant whatever is ready on its first free tile. Only the
+// classic part keeps the replies, so capturing versus alone leaves them as they were.
+async function playStep(keepReplies: boolean): Promise<Json> {
   const before = await state();
   if (before.board.suns.some((sun: Json) => !sun.beingCollected)) await post("/actions", { type: "collectSun" });
   for (const packet of before.board.seedPackets) {
     if (packet.ready && packet.plantableTiles.length > 0) {
       const tile = packet.plantableTiles[0];
-      keep("placed", await post("/actions", { type: "placePlant", slot: packet.slot, col: tile.col, row: tile.row }));
+      const placed = await post("/actions", { type: "placePlant", slot: packet.slot, col: tile.col, row: tile.row });
+      if (keepReplies) keep("placed", placed);
       break;
     }
   }
-  keep("stepped", await post("/control", { type: "step", ticks: 100, speed: 50 }));
+  const stepped = await post("/control", { type: "step", ticks: 100, speed: 50 });
+  if (keepReplies) keep("stepped", stepped);
   return state();
 }
 
-async function playUntil(done: (snapshot: Json) => boolean): Promise<Json> {
+async function playUntil(done: (snapshot: Json) => boolean, keepReplies = true): Promise<Json> {
   for (let i = 0; i < 500; i++) {
-    const snapshot = await playStep();
+    const snapshot = await playStep(keepReplies);
     if (done(snapshot)) return snapshot;
   }
   throw new Error("gave up waiting");
 }
 
-try {
+async function classic(): Promise<void> {
   keep("level-started", await post("/control", { type: "startLevel", level: "1-1" }));
   await save("1-1-start", await state());
 
@@ -133,7 +147,51 @@ try {
   const dave = await send("/control", { type: "startLevel", level: "2-1" });
   if (dave.status !== 409) throw new Error(`expected 2-1 to be refused, got ${dave.status} ${JSON.stringify(dave.body)}`);
   keep("crazy-dave", dave);
+}
 
+// Versus levels, as the zombie seat sees them, and the game's answers to sendZombie.
+async function versus(): Promise<void> {
+  const outside = await send("/actions", { type: "sendZombie", zombie: "zombie", row: 2 });
+  if (outside.status !== 409) throw new Error(`expected a send outside versus to be refused, got ${outside.status} ${JSON.stringify(outside.body)}`);
+  keep("not-versus", outside);
+
+  // 1-9 makes you choose seeds: the first ones it offers.
+  const asked = await send("/control", { type: "startLevel", level: "1-9", versus: true });
+  const { choices, pick } = asked.body.error;
+  await post("/control", { type: "chooseSeeds", seeds: choices.slice(0, pick) });
+  await save("1-9-versus-start", await zombiesView());
+
+  // The first wave pays 1 point: one zombie spends it, and the next costs more than is left.
+  await playUntil((s) => s.versus.wave >= 1, false);
+  keep("zombie-sent", await post("/actions", { type: "sendZombie", zombie: "zombie", row: 2 }));
+  const refused = await send("/actions", { type: "sendZombie", zombie: "zombie", row: 1 });
+  if (refused.status !== 409) throw new Error(`expected a send with no points left to be refused, got ${refused.status} ${JSON.stringify(refused.body)}`);
+  keep("zombie-refused", refused);
+
+  // A few waves on, with plants up and a conehead walking in that only the zombie seat sees yet.
+  await playUntil((s) => s.versus.wave >= 4 && s.board.plants.length >= 6, false);
+  await post("/actions", { type: "sendZombie", zombie: "conehead_zombie", row: 0 });
+  await save("1-9-versus-midgame", await zombiesView());
+
+  // The first huge wave's warning: a send is held until the wave arrives.
+  await playUntil((s) => s.board.progress.hugeWaveIncoming && s.board.progress.wave === 9, false);
+  keep("zombie-held", await post("/actions", { type: "sendZombie", zombie: "conehead_zombie", row: 1 }));
+  await save("1-9-versus-warning", await zombiesView());
+
+  // The zombies' win: 1-2 with no plants, a zombie down row 2 at each payday, until one gets past the mower.
+  await post("/control", { type: "startLevel", level: "1-2", versus: true });
+  for (let i = 0; i < 500 && (await state()).board?.result === "playing"; i++) {
+    if ((await state()).versus.points > 0) await post("/actions", { type: "sendZombie", zombie: "zombie", row: 2 });
+    await post("/control", { type: "step", ticks: 100, speed: 50 });
+  }
+  const lost = await zombiesView();
+  if (lost.board?.result !== "lost") throw new Error(`expected the zombies to win 1-2, got ${JSON.stringify(lost.board?.result)}`);
+  await save("1-2-versus-lost", lost);
+}
+
+try {
+  if (wanted("classic")) await classic();
+  if (wanted("versus")) await versus();
   await save("replies", replies);
 } finally {
   await game.stop();

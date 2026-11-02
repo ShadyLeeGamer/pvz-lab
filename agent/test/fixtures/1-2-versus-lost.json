@@ -1,0 +1,195 @@
+{
+  "apiVersion": 1,
+  "view": "zombies",
+  "appTicks": 46159,
+  "scene": "zombies_won",
+  "mode": "adventure",
+  "modeId": 0,
+  "clock": {
+    "state": "frozen",
+    "speed": 50
+  },
+  "dialogOpen": false,
+  "minimized": false,
+  "board": {
+    "level": 2,
+    "levelName": "1-2",
+    "stage": "day",
+    "paused": false,
+    "gameTicks": 18015,
+    "boardTicks": 18956,
+    "result": "lost",
+    "sun": 50,
+    "sunSpendable": 50,
+    "shovel": false,
+    "seedPackets": [
+      {
+        "slot": 0,
+        "plant": "peashooter",
+        "plantId": 0,
+        "cost": 100,
+        "ready": false,
+        "held": false,
+        "recharge": 1,
+        "plantableTiles": []
+      },
+      {
+        "slot": 1,
+        "plant": "sunflower",
+        "plantId": 1,
+        "cost": 50,
+        "ready": false,
+        "held": false,
+        "recharge": 1,
+        "plantableTiles": []
+      }
+    ],
+    "lawn": {
+      "rows": [
+        "dirt",
+        "grass",
+        "grass",
+        "grass",
+        "dirt"
+      ],
+      "items": [],
+      "ice": []
+    },
+    "plants": [],
+    "zombies": [
+      {
+        "id": 66650118,
+        "type": "zombie",
+        "typeId": 0,
+        "row": 2,
+        "x": 344,
+        "y": 250,
+        "onScreen": true,
+        "eating": false,
+        "slowed": false,
+        "frozen": false,
+        "buttered": false,
+        "hypnotized": false,
+        "inPool": false,
+        "flying": false,
+        "underground": false,
+        "hasArm": true,
+        "hasHead": true,
+        "helm": null,
+        "shield": null
+      },
+      {
+        "id": 66453511,
+        "type": "zombie",
+        "typeId": 0,
+        "row": 2,
+        "x": -100,
+        "y": 290,
+        "onScreen": true,
+        "eating": false,
+        "slowed": false,
+        "frozen": false,
+        "buttered": false,
+        "hypnotized": false,
+        "inPool": false,
+        "flying": false,
+        "underground": false,
+        "hasArm": true,
+        "hasHead": true,
+        "helm": null,
+        "shield": null
+      },
+      {
+        "id": 66519048,
+        "type": "zombie",
+        "typeId": 0,
+        "row": 2,
+        "x": 161,
+        "y": 250,
+        "onScreen": true,
+        "eating": false,
+        "slowed": false,
+        "frozen": false,
+        "buttered": false,
+        "hypnotized": false,
+        "inPool": false,
+        "flying": false,
+        "underground": false,
+        "hasArm": true,
+        "hasHead": true,
+        "helm": null,
+        "shield": null
+      },
+      {
+        "id": 66584585,
+        "type": "zombie",
+        "typeId": 0,
+        "row": 2,
+        "x": 308,
+        "y": 250,
+        "onScreen": true,
+        "eating": false,
+        "slowed": false,
+        "frozen": false,
+        "buttered": false,
+        "hypnotized": false,
+        "inPool": false,
+        "flying": false,
+        "underground": false,
+        "hasArm": true,
+        "hasHead": true,
+        "helm": null,
+        "shield": null
+      }
+    ],
+    "suns": [
+      {
+        "id": 67305472,
+        "value": 25,
+        "x": 345,
+        "y": 146,
+        "beingCollected": false
+      },
+      {
+        "id": 67239937,
+        "value": 25,
+        "x": 530,
+        "y": 445,
+        "beingCollected": false
+      }
+    ],
+    "award": null,
+    "mowers": [
+      {
+        "row": 1,
+        "kind": "lawn_mower",
+        "state": "ready"
+      },
+      {
+        "row": 3,
+        "kind": "lawn_mower",
+        "state": "ready"
+      }
+    ],
+    "progress": {
+      "wave": 5,
+      "totalWaves": 6,
+      "meter": 0.87,
+      "hugeWaveIncoming": false
+    }
+  },
+  "versus": {
+    "points": 0,
+    "wave": 5,
+    "types": [
+      {
+        "zombie": "zombie",
+        "cost": 1,
+        "firstWave": 1,
+        "ready": false
+      }
+    ],
+    "held": [],
+    "refunds": []
+  }
+}

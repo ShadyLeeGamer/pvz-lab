@@ -1,0 +1,8 @@
+{
+  "side": "zombies",
+  "level": "1-2",
+  "clock": "realtime",
+  "speed": 1,
+  "tools": ["get_state", "send_zombie", "wait"],
+  "brief": "../../prompts/zombies.md"
+}
