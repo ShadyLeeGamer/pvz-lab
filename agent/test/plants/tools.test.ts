@@ -1,16 +1,16 @@
-// The MCP tools, called through a real MCP client and server. The game is a stand-in that replays
-// states and replies captured from the real game and records every request, so these tests check
-// what the tools send and say. The end-to-end tests check the same tools against the real game.
+// The plants' MCP tools, called through a real MCP client and server. The game is a stand-in that
+// replays states and replies captured from the real game and records every request, so these tests
+// check what the tools send and say. The end-to-end tests check the same tools against the real game.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
-import type { Game } from "../src/game-client.ts";
-import type { GameStarter } from "../src/mcp/own-game.ts";
-import { normalizeName, registerTools, streetLine } from "../src/mcp/tools.ts";
-import type { ToolName } from "../src/session.ts";
-import { fixture, reply, savedReply } from "./fixtures/fixture.ts";
-import { StandInGame } from "./stand-in-game.ts";
+import type { Game } from "../../src/game-client.ts";
+import type { GameStarter } from "../../src/mcp/own-game.ts";
+import { registerPlantTools } from "../../src/plants/tools.ts";
+import type { ToolName } from "../../src/session.ts";
+import { fixture, reply, savedReply } from "../fixtures/fixture.ts";
+import { StandInGame } from "../stand-in-game.ts";
 
 // Stands in for the server's own game in a chat app: it only records that it was started.
 class StandInStarter implements GameStarter {
@@ -31,7 +31,7 @@ interface Options {
 
 async function connect(game: Game, tools = ALL_TOOLS, options: Options = {}): Promise<Client> {
   const server = new McpServer({ name: "pvz", version: "test" });
-  registerTools(server, tools, { game, clock: options.clock ?? "waits", speed: options.speed ?? 1, starter: options.starter });
+  registerPlantTools(server, tools, { game, clock: options.clock ?? "waits", speed: options.speed ?? 1, starter: options.starter });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const client = new Client({ name: "test", version: "test" });
@@ -266,21 +266,5 @@ describe("start_level, for chat apps", () => {
     expect(await call(client, "wait", { seconds: 1 })).toEqual({ text: NO_GAME_YET, isError: true });
     expect(game.actions).toEqual([]);
     expect(game.controls).toEqual([]);
-  });
-});
-
-describe("streetLine", () => {
-  it("names the street's zombies, and says nothing when the game showed none", () => {
-    expect(streetLine(["zombie", "pole_vaulting_zombie"])).toBe("The street shows the zombies coming in this level: zombie, pole_vaulting_zombie.");
-    expect(streetLine([])).toBe("");
-    expect(streetLine(undefined)).toBe("");
-  });
-});
-
-describe("normalizeName", () => {
-  it("accepts the ways people write plant names", () => {
-    expect(normalizeName("Wall-nut")).toBe("wall_nut");
-    expect(normalizeName("  cherry bomb ")).toBe("cherry_bomb");
-    expect(normalizeName("snow_pea")).toBe("snow_pea");
   });
 });

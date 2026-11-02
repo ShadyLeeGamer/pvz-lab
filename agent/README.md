@@ -37,7 +37,7 @@ A session file in `sessions/` sets the level, the clock and the tools:
   - With `"realtime"`, it also changes how much thinking time the player gets.
 - `tools`: any of `get_state`, `place_plant`, `dig_up`, `collect_sun` and `wait`. The MCP server offers only these.
   - `dig_up` digs a plant up with the shovel. The game has no shovel in 1-1 to 1-4 the first time through Adventure, which every run is, so the sessions for those levels leave it out.
-- `brief`: the instructions the player starts with, usually `prompts/play.md`.
+- `brief`: the instructions the player starts with, usually `prompts/plants.md`.
   - `{level}` and `{rules}` in it are filled in from the session, so the player is only told about its own clock, speed and tools.
   - The tools' own descriptions also match the clock.
 

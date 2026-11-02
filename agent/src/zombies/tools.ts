@@ -1,12 +1,12 @@
 // The tools the zombie side plays with in a versus level: look, send a zombie, let time pass. The game
-// carries out every send and decides what's allowed; like tools.ts, these functions only translate and
-// describe. The zombie side always plays in real time, so wait never touches the game's clock.
+// carries out every send and decides what's allowed; like the plants' tools, these functions only translate
+// and describe. The zombie side always plays in real time, so wait never touches the game's clock.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { GameState } from "../game-client.ts";
+import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, type ToolContext } from "../mcp/shared.ts";
 import type { ToolName } from "../session.ts";
-import { summarizeZombies } from "../summarize-zombies.ts";
-import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, type ToolContext } from "./tools.ts";
+import { summarizeZombies } from "./summary.ts";
 
 // How often wait looks for a payday or the level's end (D16).
 export const PAYDAY_POLL_MS = 250;

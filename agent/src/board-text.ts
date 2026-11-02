@@ -1,5 +1,5 @@
-// Turns the game state into the short text Claude reads: a map of the lawn, then the details as lists.
-// It only ever gets the player view, so nothing hidden from a player can reach Claude.
+// The text both sides read about the game: how a level opens, the lawn map, the seed packets and the
+// zombies. Each side's summary (plants/summary.ts, zombies/summary.ts) is built from these.
 import type { BoardState, GameState } from "./game-client.ts";
 import type { Side } from "./session.ts";
 
@@ -38,14 +38,31 @@ export function plantSymbols(board: BoardState): Map<string, string> {
   return symbols;
 }
 
-const words = (name: string) => name.replaceAll("_", " ");
+export const words = (name: string) => name.replaceAll("_", " ");
 const percent = (fraction: number) => `${Math.round(fraction * 100)}%`;
-const list = (items: (string | number)[]) => items.join(", ");
 
 function topPlantAt(board: BoardState, col: number, row: number): Plant | undefined {
   return board.plants
     .filter((plant) => plant.col === col && plant.row === row)
     .sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer))[0];
+}
+
+// What's holding the game up, then the level and its waves: both sides' summaries open with these.
+export function levelLines(state: GameState, board: BoardState): string[] {
+  const lines: string[] = [];
+  if (state.minimized) lines.push("The game window is minimized, so game time can't pass.");
+  if (state.dialogOpen || board.paused) lines.push("The game is paused by a menu or dialog.");
+  const { wave, totalWaves, meter, hugeWaveIncoming } = board.progress;
+  lines.push(
+    `Level ${board.levelName} (${board.stage}). Game time ${(board.gameTicks / 100).toFixed(1)} s. ` +
+      `Waves: ${wave} of ${totalWaves} sent (${percent(meter)} through the level).${hugeWaveIncoming ? " A huge wave is coming!" : ""}`,
+  );
+  return lines;
+}
+
+// The zombies a level's intro shows waiting on the street, as a line for the player; empty if there are none.
+export function streetLine(zombies: string[] | undefined): string {
+  return zombies && zombies.length > 0 ? `The street shows the zombies coming in this level: ${zombies.join(", ")}.` : "";
 }
 
 export function packetLine(packet: SeedPacket, sunToSpend: number): string {
@@ -101,7 +118,7 @@ export function lawnLines(board: BoardState, symbols: Map<string, string>): stri
 }
 
 // Told to the side that reads it: the plants' house is "your house" only to the plants.
-export function zombieLine(zombie: Zombie, board: BoardState, side: Side = "plants"): string {
+export function zombieLine(zombie: Zombie, board: BoardState, side: Side): string {
   const col = zombieColumn(zombie.x);
   const house = side === "plants" ? "your house" : "the plants' house";
   const where = col >= COLUMNS ? "walking in from the right" : col < 0 ? `at ${house}` : `at column ${col}`;
@@ -122,64 +139,4 @@ export function zombieLine(zombie: Zombie, board: BoardState, side: Side = "plan
   if (zombie.flying) notes.push("flying");
   if (zombie.underground) notes.push("underground");
   return `- row ${zombie.row}: ${zombie.type} ${where}${notes.length > 0 ? `, ${notes.join(", ")}` : ""}`;
-}
-
-function plantNote(plant: Plant): string | undefined {
-  const notes: string[] = [];
-  if (plant.damage && plant.damage !== "none") notes.push(words(plant.damage));
-  if (plant.state) notes.push(plant.state);
-  if (plant.asleep) notes.push("asleep");
-  return notes.length > 0 ? `- ${plant.type} at column ${plant.col}, row ${plant.row}: ${notes.join(", ")}` : undefined;
-}
-
-export interface SummaryOptions {
-  shovel?: boolean; // the player can dig plants up, so say when the level has no shovel
-}
-
-export function summarize(state: GameState, options: SummaryOptions = {}): string {
-  const board = state.board;
-  if (!board) {
-    if (state.scene === "award") return "Level won! The game is showing the award screen.";
-    return "No level is being played right now.";
-  }
-
-  const lines: string[] = [];
-  if (board.result === "won") lines.push(`You won level ${board.levelName}!`);
-  if (board.result === "lost") lines.push(`The zombies got into your house. Level ${board.levelName} is lost.`);
-  if (state.minimized) lines.push("The game window is minimized, so game time can't pass.");
-  if (state.dialogOpen || board.paused) lines.push("The game is paused by a menu or dialog.");
-
-  const { wave, totalWaves, meter, hugeWaveIncoming } = board.progress;
-  lines.push(
-    `Level ${board.levelName} (${board.stage}). Game time ${(board.gameTicks / 100).toFixed(1)} s. ` +
-      `Waves: ${wave} of ${totalWaves} sent (${percent(meter)} through the level).${hugeWaveIncoming ? " A huge wave is coming!" : ""}`,
-  );
-  const flying = board.sunSpendable - board.sun;
-  lines.push(`Sun: ${board.sunSpendable} to spend${flying > 0 ? ` (${flying} of it still flying to the counter)` : ""}.`);
-
-  lines.push("", "Seed packets:", ...board.seedPackets.map((packet) => packetLine(packet, board.sunSpendable)));
-  if (options.shovel && !board.shovel) lines.push("This level has no shovel, so nothing can be dug up.");
-
-  const lastRow = board.lawn.rows.length - 1;
-  lines.push(
-    "",
-    `Lawn: columns 0-8 run from your house (left) to where zombies come in (right); rows 0-${lastRow} run top to bottom.`,
-    ...lawnLines(board, plantSymbols(board)),
-  );
-
-  const zombies = [...board.zombies].sort((a, b) => a.row - b.row || a.x - b.x);
-  lines.push("", zombies.length > 0 ? "Zombies:" : "Zombies: none in sight.", ...zombies.map((zombie) => zombieLine(zombie, board)));
-
-  const notes = board.plants.map(plantNote).filter((note) => note !== undefined);
-  if (notes.length > 0) lines.push("Plants to note:", ...notes);
-
-  const suns = board.suns.filter((sun) => !sun.beingCollected);
-  const sunValue = suns.reduce((total, sun) => total + sun.value, 0);
-  lines.push(suns.length > 0 ? `Suns waiting to be collected: ${suns.length} (${sunValue} sun).` : "Suns waiting to be collected: none.");
-
-  const mowerRows = board.mowers.filter((mower) => mower.state === "ready" || mower.state === "rolling_in").map((mower) => mower.row);
-  lines.push(mowerRows.length > 0 ? `Lawnmowers left in rows: ${list(mowerRows)}.` : "Lawnmowers left: none.");
-  for (const mower of board.mowers.filter((m) => m.state === "triggered")) lines.push(`A lawnmower is clearing row ${mower.row}.`);
-
-  return lines.join("\n");
 }

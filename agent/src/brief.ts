@@ -23,9 +23,8 @@ function zombieRules({ speed, tools }: Session): string[] {
   ];
 }
 
-export function sessionRules(settings: Session): string[] {
-  if (settings.side === "zombies") return zombieRules(settings);
-  const { clock, speed, tools } = settings;
+// The plants' side plays paused or in real time, with the tools its session lists.
+function plantRules({ clock, speed, tools }: Session): string[] {
   const has = (tool: ToolName) => tools.includes(tool);
   const rules: string[] = [];
 
@@ -51,6 +50,10 @@ export function sessionRules(settings: Session): string[] {
   );
   rules.push("Every tool tells you what happened and then shows the game.");
   return rules;
+}
+
+export function sessionRules(settings: Session): string[] {
+  return settings.side === "zombies" ? zombieRules(settings) : plantRules(settings);
 }
 
 export function writeBrief(template: string, settings: Session): string {

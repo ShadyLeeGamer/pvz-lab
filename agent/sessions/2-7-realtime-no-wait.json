@@ -4,6 +4,6 @@
   "clock": "realtime",
   "speed": 1,
   "tools": ["get_state", "place_plant", "dig_up", "collect_sun"],
-  "brief": "../prompts/play.md",
+  "brief": "../prompts/plants.md",
   "maxTurns": 400
 }

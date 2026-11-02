@@ -5,10 +5,10 @@ import { describe, expect, it } from "vitest";
 import { writeBrief } from "../src/brief.ts";
 import type { Session } from "../src/session.ts";
 
-const template = readFileSync(new URL("../prompts/play.md", import.meta.url), "utf8");
+const template = readFileSync(new URL("../prompts/plants.md", import.meta.url), "utf8");
 
 function session(settings: Partial<Session>): Session {
-  return { side: "plants", level: "1-1", clock: "waits", speed: 1, tools: ["get_state", "place_plant", "collect_sun", "wait"], brief: "play.md", maxTurns: 400, ...settings };
+  return { side: "plants", level: "1-1", clock: "waits", speed: 1, tools: ["get_state", "place_plant", "collect_sun", "wait"], brief: "plants.md", maxTurns: 400, ...settings };
 }
 
 describe("writeBrief", () => {
@@ -29,7 +29,7 @@ Play the level to the end on your own. When a tool says the level is over, stop.
   });
 
   it("tells a chat app's player how to start levels, with no level of its own", () => {
-    const chat = readFileSync(new URL("../prompts/chat.md", import.meta.url), "utf8");
+    const chat = readFileSync(new URL("../prompts/plants-chat.md", import.meta.url), "utf8");
     const text = writeBrief(chat, session({ level: undefined, tools: ["start_level", "get_state", "place_plant", "collect_sun", "wait"] }));
     expect(text).toContain("- Start a level with start_level. From 1-8 on, a level first asks which seed packets to bring");
     expect(text).not.toMatch(/\{\w+\}/);

@@ -10,11 +10,12 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { streetLine } from "./board-text.ts";
 import { writeBrief } from "./brief.ts";
 import { describeEvent } from "./claude-events.ts";
 import { GameClient, type GameState } from "./game-client.ts";
 import { launchGame, loadEnv, readGameConfig } from "./game-process.ts";
-import { normalizeName, streetLine } from "./mcp/tools.ts";
+import { normalizeName } from "./mcp/shared.ts";
 import { loadSession } from "./session.ts";
 
 const SERVER_NAME = "pvz";

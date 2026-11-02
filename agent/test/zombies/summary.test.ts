@@ -1,9 +1,9 @@
 // The text the zombie side's player reads, checked against the zombie seat's real views of versus
 // levels (test/fixtures, captured with `pnpm fixtures:capture versus`).
 import { describe, expect, it } from "vitest";
-import type { GameState } from "../src/game-client.ts";
-import { summarizeZombies } from "../src/summarize-zombies.ts";
-import { fixture } from "./fixtures/fixture.ts";
+import type { GameState } from "../../src/game-client.ts";
+import { summarizeZombies } from "../../src/zombies/summary.ts";
+import { fixture } from "../fixtures/fixture.ts";
 
 describe("summarizeZombies", () => {
   it("before the first payday, says there are no points yet and lists the level's types with their costs", () => {

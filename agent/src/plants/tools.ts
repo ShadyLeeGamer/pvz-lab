@@ -1,41 +1,16 @@
-// The tools Claude plays with: look, plant, dig up, collect sun, let time pass. The game carries out
-// every move and decides what's allowed; these functions only translate and describe.
+// The tools the plants' side plays with: look, plant, dig up, collect sun, let time pass. The game
+// carries out every move and decides what's allowed; these functions only translate and describe.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import type { ApiError, Game, GameState } from "../game-client.ts";
+import { streetLine } from "../board-text.ts";
+import type { ApiError, GameState } from "../game-client.ts";
+import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, type ToolContext } from "../mcp/shared.ts";
 import type { ToolName } from "../session.ts";
-import { summarize } from "../summarize.ts";
-import type { GameStarter } from "./own-game.ts";
-
-export interface ToolContext {
-  game: Game;
-  starter?: GameStarter; // in a chat app the server starts its own game, when start_level is first called
-  clock: "waits" | "realtime";
-  speed: number; // how fast game time runs whenever it runs; 1 is normal speed
-  log?: (entry: Record<string, unknown>) => void;
-}
+import { summarizePlants } from "./summary.ts";
 
 const NO_GAME_YET = "No level is being played yet. Start one with start_level.";
 
-export const MAX_WAIT_SECONDS = 30;
 const TICKS_PER_SECOND = 100;
-
-export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-export function reply(text: string, isError = false): CallToolResult {
-  return isError ? { content: [{ type: "text", text }], isError: true } : { content: [{ type: "text", text }] };
-}
-
-// Names the way people write them: "Wall-nut", "wall nut" and "wall_nut" all mean the game's wall_nut,
-// and "Conehead Zombie" the game's conehead_zombie.
-export function normalizeName(name: string): string {
-  return name.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
-export function levelIsOver(state: GameState): boolean {
-  return !state.board || state.board.result !== "playing";
-}
 
 function endOfLevel(state: GameState, levelName = state.board?.levelName): string {
   const stop = "The level is over, so you can stop playing.";
@@ -65,11 +40,6 @@ async function look(context: ToolContext): Promise<{ state: GameState; levelName
   return { state: await finishWonLevel(context, first), levelName: first.board?.levelName };
 }
 
-// The zombies a level's intro shows waiting on the street, as a line for the player; empty if there are none.
-export function streetLine(zombies: string[] | undefined): string {
-  return zombies && zombies.length > 0 ? `The street shows the zombies coming in this level: ${zombies.join(", ")}.` : "";
-}
-
 // What start_level says when a level asks which seed packets to bring, like the seed chooser screen.
 function seedChoice(level: string, error: ApiError, triedSeeds: boolean): string {
   const choices = (error.choices ?? []).map((plant, i) => (error.costs?.[i] === undefined ? plant : `${plant} (${error.costs[i]} sun)`));
@@ -78,20 +48,7 @@ function seedChoice(level: string, error: ApiError, triedSeeds: boolean): string
   return `${why}\n${street ? `${street}\n` : ""}You can choose from: ${choices.join(", ")}.\nCall start_level again with the ${error.pick} you pick.`;
 }
 
-// Runs a tool, logs the call, and turns anything unexpected into an error Claude can read.
-export async function logged(context: ToolContext, tool: ToolName, input: unknown, handler: () => Promise<CallToolResult>): Promise<CallToolResult> {
-  let result: CallToolResult;
-  try {
-    result = await handler();
-  } catch (error) {
-    result = reply(`Something went wrong: ${error instanceof Error ? error.message : String(error)}`, true);
-  }
-  const first = result.content[0];
-  context.log?.({ tool, input, error: result.isError === true, text: first?.type === "text" ? first.text : "" });
-  return result;
-}
-
-export function registerTools(server: McpServer, tools: readonly ToolName[], context: ToolContext): void {
+export function registerPlantTools(server: McpServer, tools: readonly ToolName[], context: ToolContext): void {
   const { game } = context;
   const enabled = new Set(tools);
   // Only true while the game waits for the player; in real time the game runs on during every call.
@@ -101,7 +58,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
   // What a tool shows after acting: the game, or the end of the level if it ended meanwhile.
   const show = async (levelName?: string): Promise<string> => {
     const now = await look(context);
-    return levelIsOver(now.state) ? endOfLevel(now.state, now.levelName ?? levelName) : summarize(now.state, summary);
+    return levelIsOver(now.state) ? endOfLevel(now.state, now.levelName ?? levelName) : summarizePlants(now.state, summary);
   };
   // In a chat app nothing runs until the first start_level.
   const noGameYet = (): boolean => context.starter !== undefined && !context.starter.started;
@@ -136,7 +93,7 @@ export function registerTools(server: McpServer, tools: readonly ToolName[], con
           }
           const how = context.clock === "waits" ? "The game is paused while you think." : "The game is running.";
           const street = streetLine(result.reply.zombies);
-          return reply(`Level ${input.level} started. ${how}\n${street ? `${street}\n` : ""}\n${summarize(await game.state(), summary)}`);
+          return reply(`Level ${input.level} started. ${how}\n${street ? `${street}\n` : ""}\n${summarizePlants(await game.state(), summary)}`);
         }),
     );
   }

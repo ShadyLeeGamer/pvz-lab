@@ -1,11 +1,11 @@
-// The text Claude reads, checked against real states captured from the game (test/fixtures).
+// The text the plants' side reads, checked against real states captured from the game (test/fixtures).
 import { describe, expect, it } from "vitest";
-import { plantSymbols, summarize, zombieColumn } from "../src/summarize.ts";
-import { fixture } from "./fixtures/fixture.ts";
+import { summarizePlants } from "../../src/plants/summary.ts";
+import { fixture } from "../fixtures/fixture.ts";
 
-describe("summarize", () => {
+describe("summarizePlants", () => {
   it("opens 1-1 with the level, the sun, its one packet and the one row that takes plants", () => {
-    const text = summarize(fixture("1-1-start"));
+    const text = summarizePlants(fixture("1-1-start"));
     expect(text).toContain("Level 1-1 (day). Game time 0.0 s. Waves: 0 of 4 sent (0% through the level).");
     expect(text).toContain("Sun: 150 to spend.");
     expect(text).toContain("- peashooter: 100 sun. Ready.");
@@ -15,7 +15,7 @@ describe("summarize", () => {
   });
 
   it("draws plants on the map, and a zombie still walking in under the + column", () => {
-    const text = summarize(fixture("1-1-zombie"));
+    const text = summarizePlants(fixture("1-1-zombie"));
     expect(text).toMatch(/^row 2 {2}P P \. \. \. \. \. \. \. Z$/m);
     expect(text).toContain("- row 2: zombie walking in from the right");
     expect(text).toContain("- peashooter: 100 sun. Recharging, 53% done; then needs 100 more sun.");
@@ -24,7 +24,7 @@ describe("summarize", () => {
   });
 
   it("puts each zombie in its row and column, and lists the plants worth knowing about", () => {
-    const text = summarize(fixture("1-8-midgame"));
+    const text = summarizePlants(fixture("1-8-midgame"));
     expect(text).toMatch(/^row 0 {2}S S S M S W S S \. Z$/m);
     expect(text).toMatch(/^row 1 {2}\. \. \. \. \. Z \. \. \.$/m);
     expect(text).toContain("- row 1: zombie at column 5");
@@ -35,7 +35,7 @@ describe("summarize", () => {
   });
 
   it("says why each packet can't be used yet", () => {
-    const text = summarize(fixture("1-8-midgame"));
+    const text = summarizePlants(fixture("1-8-midgame"));
     expect(text).toContain("- peashooter: 100 sun. Needs 75 more sun.");
     expect(text).toContain("- sunflower: 50 sun. Recharging, 13% done; then needs 25 more sun.");
     expect(text).toContain("- potato_mine: 25 sun. Recharging, 99% done.");
@@ -43,42 +43,16 @@ describe("summarize", () => {
 
   it("says when a level has no shovel, but only to a player that can dig", () => {
     const noShovel = "This level has no shovel, so nothing can be dug up.";
-    expect(summarize(fixture("1-1-start"), { shovel: true })).toContain(noShovel);
-    expect(summarize(fixture("1-1-start"))).not.toContain("shovel");
-    expect(summarize(fixture("1-8-start"), { shovel: true })).not.toContain("shovel");
+    expect(summarizePlants(fixture("1-1-start"), { shovel: true })).toContain(noShovel);
+    expect(summarizePlants(fixture("1-1-start"))).not.toContain("shovel");
+    expect(summarizePlants(fixture("1-8-start"), { shovel: true })).not.toContain("shovel");
   });
 
   it("leads with the result once the level is won", () => {
-    expect(summarize(fixture("1-1-won")).split("\n")[0]).toBe("You won level 1-1!");
+    expect(summarizePlants(fixture("1-1-won")).split("\n")[0]).toBe("You won level 1-1!");
   });
 
   it("says when there's no lawn to show", () => {
-    expect(summarize(fixture("award-screen"))).toBe("Level won! The game is showing the award screen.");
-  });
-});
-
-describe("zombieColumn", () => {
-  it("puts a zombie eating a plant in that plant's column", () => {
-    // A normal zombie stops to eat the plant in column c once its bite (x + 50) reaches the plant's right edge, 110 + 80c.
-    for (let col = 0; col < 9; col++) expect(zombieColumn(60 + 80 * col)).toBe(col);
-  });
-
-  it("says a zombie at the right edge is still walking in, and one past column 0 is at the house", () => {
-    expect(zombieColumn(751)).toBeGreaterThanOrEqual(9);
-    expect(zombieColumn(-60)).toBeLessThan(0);
-  });
-});
-
-describe("plantSymbols", () => {
-  it("gives each plant type its own capital letter, never Z, starting from its words", () => {
-    const symbols = plantSymbols(fixture("1-8-start").board!);
-    expect(Object.fromEntries(symbols)).toEqual({
-      peashooter: "P",
-      sunflower: "S",
-      cherry_bomb: "C",
-      wall_nut: "W",
-      potato_mine: "M",
-      snow_pea: "N",
-    });
+    expect(summarizePlants(fixture("award-screen"))).toBe("Level won! The game is showing the award screen.");
   });
 });

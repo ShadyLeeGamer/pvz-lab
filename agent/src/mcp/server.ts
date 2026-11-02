@@ -18,10 +18,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { writeBrief } from "../brief.ts";
 import { GameClient } from "../game-client.ts";
+import { registerPlantTools } from "../plants/tools.ts";
 import { loadSession } from "../session.ts";
+import { registerZombieTools } from "../zombies/tools.ts";
 import { OwnGame } from "./own-game.ts";
-import { registerTools } from "./tools.ts";
-import { registerZombieTools } from "./zombie-tools.ts";
 
 const { PVZ_SESSION, PVZ_API_URL, PVZ_LOG } = process.env;
 if (!PVZ_SESSION) {
@@ -56,7 +56,7 @@ const context = {
   log: PVZ_LOG ? (entry: Record<string, unknown>) => appendFileSync(PVZ_LOG, `${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`) : undefined,
 };
 if (side === "zombies") registerZombieTools(server, tools, context);
-else registerTools(server, tools, context);
+else registerPlantTools(server, tools, context);
 
 if (side === "zombies") {
   server.registerPrompt(

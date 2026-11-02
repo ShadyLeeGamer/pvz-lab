@@ -1,12 +1,11 @@
 // Turns the zombie seat's view (view=zombies) into the text the zombie side's player reads: its points
 // and the zombies it can send, the plants' defence row by row, and the same lawn map the plants see.
-// Like summarize.ts, it only ever gets a seat's view, so nothing hidden from a player can reach it.
-import type { BoardState, GameState, VersusState } from "./game-client.ts";
-import { lawnLines, packetLine, plantSymbols, zombieLine } from "./summarize.ts";
+// Like the plants' summary, it only ever gets a seat's view, so nothing hidden from a player can reach it.
+import { lawnLines, levelLines, packetLine, plantSymbols, words, zombieLine } from "../board-text.ts";
+import type { BoardState, GameState, VersusState } from "../game-client.ts";
 
 type VersusType = VersusState["types"][number];
 
-const words = (name: string) => name.replaceAll("_", " ");
 const points = (count: number) => `${count} point${count === 1 ? "" : "s"}`;
 
 // Why a held zombie couldn't walk on: only the game's own rules can stop it once it's held.
@@ -58,14 +57,7 @@ export function summarizeZombies(state: GameState): string {
   const lines: string[] = [];
   if (board.result === "won") lines.push(`The plants won level ${board.levelName}.`);
   if (board.result === "lost") lines.push(`Your zombies got into the house: you won level ${board.levelName}!`);
-  if (state.minimized) lines.push("The game window is minimized, so game time can't pass.");
-  if (state.dialogOpen || board.paused) lines.push("The game is paused by a menu or dialog.");
-
-  const { wave, totalWaves, meter, hugeWaveIncoming } = board.progress;
-  lines.push(
-    `Level ${board.levelName} (${board.stage}). Game time ${(board.gameTicks / 100).toFixed(1)} s. ` +
-      `Waves: ${wave} of ${totalWaves} sent (${Math.round(meter * 100)}% through the level).${hugeWaveIncoming ? " A huge wave is coming!" : ""}`,
-  );
+  lines.push(...levelLines(state, board));
 
   const versus = state.versus;
   if (!versus) {
@@ -77,7 +69,7 @@ export function summarizeZombies(state: GameState): string {
       ? "Your points: none yet. The first wave pays you when it arrives."
       : `Your points: ${versus.points}, for wave ${versus.wave}. Points still unspent when the next wave pays are lost.`,
   );
-  lines.push("", "Zombies you can send:", ...versus.types.map((type) => typeLine(type, versus, totalWaves)));
+  lines.push("", "Zombies you can send:", ...versus.types.map((type) => typeLine(type, versus, board.progress.totalWaves)));
   if (versus.held && versus.held.length > 0) {
     lines.push(`Held to walk on with wave ${versus.wave}'s flag zombie: ${versus.held.map(heldItem).join(", ")}.`);
   }

@@ -2,5 +2,5 @@
   "clock": "realtime",
   "speed": 1,
   "tools": ["start_level", "get_state", "place_plant", "dig_up", "collect_sun"],
-  "brief": "../prompts/chat.md"
+  "brief": "../prompts/plants-chat.md"
 }

@@ -1,14 +1,14 @@
 // The zombie side's MCP tools, called through a real MCP client and server. The game is the stand-in
-// from tools.test.ts, replaying the zombie seat's real views and the game's own replies to sendZombie.
-// The end-to-end tests check the same tools against the real game.
+// the plants' tool tests use too, replaying the zombie seat's real views and the game's own replies to
+// sendZombie. The end-to-end tests check the same tools against the real game.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
-import type { Game } from "../src/game-client.ts";
-import { registerZombieTools } from "../src/mcp/zombie-tools.ts";
-import { fixture, reply } from "./fixtures/fixture.ts";
-import { StandInGame } from "./stand-in-game.ts";
+import type { Game } from "../../src/game-client.ts";
+import { registerZombieTools } from "../../src/zombies/tools.ts";
+import { fixture, reply } from "../fixtures/fixture.ts";
+import { StandInGame } from "../stand-in-game.ts";
 
 async function connect(game: Game, speed = 1): Promise<Client> {
   const server = new McpServer({ name: "pvz", version: "test" });

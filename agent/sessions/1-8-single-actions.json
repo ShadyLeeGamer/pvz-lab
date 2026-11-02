@@ -4,6 +4,6 @@
   "clock": "waits",
   "speed": 1,
   "tools": ["get_state", "place_plant", "dig_up", "collect_sun", "wait"],
-  "brief": "../prompts/play.md",
+  "brief": "../prompts/plants.md",
   "maxTurns": 400
 }
