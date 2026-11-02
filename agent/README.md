@@ -93,4 +93,4 @@ Then ask, say, "play level 2-7". The game window opens at the first level. If th
   - They dig plants up with the shovel, including a pumpkin, the plant inside it and the flower pot under them on the roof, in the order the game allows.
   - Another drives the MCP server against the game, the way Claude Code does.
   - Another runs the server the way a chat app does: it starts its own game at `start_level`, asks for seeds with their costs, and closes the game when the app closes the server.
-  - A full run takes about 40 seconds.
+  - A full run takes about 40 seconds. Set `PVZ_E2E_MUTE=1` in `.env` to run the games without sound.
