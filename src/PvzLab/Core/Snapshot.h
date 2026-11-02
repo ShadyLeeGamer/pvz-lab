@@ -161,7 +161,7 @@ namespace PvzLab
 		ProgressInfo					mProgress;
 	};
 
-	// A zombie type the zombie side of a versus match may send (see Versus.h).
+	// A zombie type the zombie side of a versus match may send (see ZombieSide.h).
 	struct VersusZombieType
 	{
 		std::string						mZombie;				// e.g. "conehead_zombie"

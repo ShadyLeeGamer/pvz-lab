@@ -1,4 +1,4 @@
-#include "Versus.h"
+#include "ZombieSide.h"
 #include <format>
 #include <utility>
 
@@ -21,12 +21,12 @@ namespace PvzLab
 		return aTable;
 	}
 
-	Versus::Versus(std::vector<Wave> theWaves, std::vector<ZombieKind> theKinds)
+	ZombieSide::ZombieSide(std::vector<Wave> theWaves, std::vector<ZombieKind> theKinds)
 		: mWaves(std::move(theWaves)), mKinds(std::move(theKinds)), mPayTable(PayTable(mWaves))
 	{
 	}
 
-	std::optional<int> Versus::AfterTick(int theWavesSent, bool theHugeWaveWarning)
+	std::optional<int> ZombieSide::AfterTick(int theWavesSent, bool theHugeWaveWarning)
 	{
 		std::optional<int> anArrived;
 		for (; mWavesSent < theWavesSent; mWavesSent++)
@@ -45,12 +45,12 @@ namespace PvzLab
 		return anArrived;
 	}
 
-	bool Versus::IsFinalWave(int theWave) const
+	bool ZombieSide::IsFinalWave(int theWave) const
 	{
 		return theWave == static_cast<int>(mWaves.size()) - 1;
 	}
 
-	void Versus::Pay(int theWave)
+	void ZombieSide::Pay(int theWave)
 	{
 		if (theWave < 0 || theWave >= static_cast<int>(mPayTable.size()))
 			return;
@@ -58,12 +58,12 @@ namespace PvzLab
 		mPoints = mPayTable[theWave];
 	}
 
-	bool Versus::AllowedNow(const ZombieKind& theKind) const
+	bool ZombieSide::AllowedNow(const ZombieKind& theKind) const
 	{
 		return mPaydayWave && (IsFinalWave(*mPaydayWave) || *mPaydayWave + 1 >= theKind.mFirstWave);
 	}
 
-	const ZombieKind* Versus::Kind(const std::string& theZombie) const
+	const ZombieKind* ZombieSide::Kind(const std::string& theZombie) const
 	{
 		for (const ZombieKind& aKind : mKinds)
 		{
@@ -73,7 +73,7 @@ namespace PvzLab
 		return nullptr;
 	}
 
-	std::optional<Problem> Versus::CheckSend(const std::string& theZombie) const
+	std::optional<Problem> ZombieSide::CheckSend(const std::string& theZombie) const
 	{
 		const ZombieKind* aKind = Kind(theZombie);
 		if (aKind == nullptr)
@@ -93,53 +93,53 @@ namespace PvzLab
 		return std::nullopt;
 	}
 
-	void Versus::Spend(const std::string& theZombie)
+	void ZombieSide::Spend(const std::string& theZombie)
 	{
 		if (const ZombieKind* aKind = Kind(theZombie))
 			mPoints -= aKind->mCost;
 	}
 
-	bool Versus::Holding() const
+	bool ZombieSide::Holding() const
 	{
 		// A normal wave pays as it arrives; only a flag wave is paid for before it has been sent.
 		return mPaydayWave && *mPaydayWave >= mWavesSent;
 	}
 
-	void Versus::Hold(HeldZombieInfo theZombie)
+	void ZombieSide::Hold(HeldZombieInfo theZombie)
 	{
 		Spend(theZombie.mZombie);
 		mHeld.push_back(std::move(theZombie));
 	}
 
-	std::vector<HeldZombieInfo> Versus::TakeHeld()
+	std::vector<HeldZombieInfo> ZombieSide::TakeHeld()
 	{
 		return std::exchange(mHeld, {});
 	}
 
-	void Versus::Refund(const HeldZombieInfo& theZombie, std::string theReason)
+	void ZombieSide::Refund(const HeldZombieInfo& theZombie, std::string theReason)
 	{
 		if (const ZombieKind* aKind = Kind(theZombie.mZombie))
 			mPoints += aKind->mCost;
 		mRefunds.push_back(RefundInfo{ theZombie.mZombie, theZombie.mRow, std::move(theReason) });
 	}
 
-	void Versus::StartWaveHealth(int theGameHealth)
+	void ZombieSide::StartWaveHealth(int theGameHealth)
 	{
 		mWaveHealth = theGameHealth;
 	}
 
-	void Versus::WalkedOn(uint32_t theId, int theHealth)
+	void ZombieSide::WalkedOn(uint32_t theId, int theHealth)
 	{
 		mSentIds.push_back(theId);
 		mWaveHealth += theHealth;
 	}
 
-	bool Versus::PaydaySpent() const
+	bool ZombieSide::PaydaySpent() const
 	{
 		return mPaydayWave && mPoints == 0;
 	}
 
-	int Versus::WaveTarget(float theFraction) const
+	int ZombieSide::WaveTarget(float theFraction) const
 	{
 		if (mWaveHealth <= 0)
 			return -1;
@@ -149,7 +149,7 @@ namespace PvzLab
 		return static_cast<int>(theFraction * mWaveHealth);
 	}
 
-	VersusInfo Versus::Info() const
+	VersusInfo ZombieSide::Info() const
 	{
 		VersusInfo anInfo;
 		anInfo.mPoints = mPoints;

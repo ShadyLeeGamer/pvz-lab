@@ -3,7 +3,7 @@
 
 #include "Core/Requests.h"
 #include "Core/Snapshot.h"
-#include "Core/Versus.h"
+#include "Core/ZombieSide.h"
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -25,7 +25,7 @@ namespace PvzLab
 	Reply Apply(const CollectAward& theAction);
 	Reply Apply(const DigUp& theAction);
 
-	// Sending a zombie for the zombie side of a versus level. The versus rules (Core/Versus.h) come first;
+	// Sending a zombie for the zombie side of a versus level. The versus rules (Core/ZombieSide.h) come first;
 	// these are the game's own. theWave is the wave being paid for, from 0.
 	// Refuses a send when no level is in play, the game is paused, a dialog is open, or the level is decided.
 	std::optional<Problem> CheckCanSend();
@@ -60,7 +60,7 @@ namespace PvzLab
 	bool PlayStarted();						// the level's first tick of play has run
 	int CurrentLevel();						// the level being played; 0 outside Adventure
 
-	// Versus: the game's own waves and zombie types, read and changed for the zombie side (see Core/Versus.h).
+	// Versus: the game's own waves and zombie types, read and changed for the zombie side (see Core/ZombieSide.h).
 	struct BoardKey
 	{
 		uintptr_t						mBoard = 0;				// which board, while it lives

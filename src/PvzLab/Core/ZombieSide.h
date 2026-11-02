@@ -39,10 +39,10 @@ namespace PvzLab
 	// flag zombie, which still walks on by itself.
 	std::vector<int>					PayTable(const std::vector<Wave>& theWaves);
 
-	class Versus
+	class ZombieSide
 	{
 	public:
-		Versus(std::vector<Wave> theWaves, std::vector<ZombieKind> theKinds);
+		ZombieSide(std::vector<Wave> theWaves, std::vector<ZombieKind> theKinds);
 
 		// Call after every game tick with the game's wave counter (Board::mCurrentWave: the waves sent so
 		// far) and whether its "huge wave" warning is up (Board::mHugeWaveCountDown > 0). Pays the zombie
