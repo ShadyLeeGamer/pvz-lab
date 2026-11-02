@@ -27,7 +27,7 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
 }
 
 describe("zombie tools", () => {
-  it("get_state shows the zombie seat's own view, never the player's", async () => {
+  it("get_state shows the zombie seat's own view, never the plants'", async () => {
     const game = new StandInGame(fixture("1-9-versus-midgame"));
     const { text } = await call(await connect(game), "get_state");
     expect(game.views).toEqual(["zombies"]);

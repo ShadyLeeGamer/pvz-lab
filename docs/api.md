@@ -17,7 +17,7 @@ The API starts with the game, on `http://127.0.0.1:7310`. Change the port with `
 ## Conventions
 
 - **Format:** JSON. Every response has `Cache-Control: no-store`. Requests send a JSON body.
-- **Version:** responses carry `apiVersion` (currently `1`). It changes only when a field is removed or changes meaning; new fields can appear at any time.
+- **Version:** responses carry `apiVersion` (currently `2`). It changes only when a field is removed or changes meaning; new fields can appear at any time. Version 2 renamed the default view from `player` to `plants`.
 - **Errors:** an error status plus `{ "error": { "code": "...", "message": "..." } }`, sometimes with more detail (see [Errors](#errors)).
 - **Time:** the game runs 100 ticks a second at normal speed. `appTicks` counts from start-up; `gameTicks` only advances while a level is being played.
 - **Positions:** `x` and `y` are pixels on the 800×600 board.
@@ -30,7 +30,7 @@ The API starts with the game, on `http://127.0.0.1:7310`. Change the port with `
 Answers as soon as the game has started, even before the first tick.
 
 ```json
-{ "apiVersion": 1, "ok": true,
+{ "apiVersion": 2, "ok": true,
   "build": { "commit": "e0e9144", "builtAt": "25 Oct 2026 01:40", "gameVersion": "0.2.5-3-g3838ec219d1a" },
   "scene": "loading", "appTicks": 412, "loaded": false }
 ```
@@ -43,8 +43,8 @@ A copy of the game state, taken at the end of the latest tick, and again right a
 
 | Query | Meaning |
 |---|---|
-| `view=player` (default) | Only what a player could see on screen. |
-| `view=zombies` | In a versus level, what the zombie side's player sees. The same as `player`, so neither side sees more than the other. |
+| `view=plants` (default) | Only what a player could see on screen: what the plants' player sees. |
+| `view=zombies` | In a versus level, what the zombie side's player sees. The same as `plants`, so neither side sees more than the other. |
 | `view=full` | Everything below, including hidden information. For debugging and overlays. |
 
 Errors: `400 bad_view` for any other `view`; `503 not_ready` before the first tick.
@@ -54,7 +54,7 @@ Errors: `400 bad_view` for any other `view`; `503 not_ready` before the first ti
 | Field | Type | Notes |
 |---|---|---|
 | `apiVersion` | number | |
-| `view` | `"player"` \| `"zombies"` \| `"full"` | |
+| `view` | `"plants"` \| `"zombies"` \| `"full"` | |
 | `appTicks` | number | Ticks since the game started. |
 | `scene` | string | `loading` (title screen), `menu`, `level_intro`, `playing`, `zombies_won`, `award`, `challenge_menu`, `credits`. |
 | `mode` | string | `adventure` or `other`. |
@@ -121,12 +121,12 @@ Errors: `400 bad_view` for any other `view`; `503 not_ready` before the first ti
 
 ### `zombies[]`
 
-Zombies that are dying, or not part of the level (menus, cutscenes), are left out. The player view also leaves out zombies that haven't walked on screen yet.
+Zombies that are dying, or not part of the level (menus, cutscenes), are left out. The plants' view also leaves out zombies that haven't walked on screen yet.
 
 | Field | Notes |
 |---|---|
 | `id`, `type`, `typeId`, `row`, `x`, `y` | |
-| `onScreen` | `false` until the zombie can be hit (always `true` in the player view). |
+| `onScreen` | `false` until the zombie can be hit (always `true` in the plants' view). |
 | `eating`, `slowed`, `frozen`, `buttered`, `hypnotized`, `inPool`, `flying`, `underground` | Visible statuses. `flying`: still on its balloon. `underground`: a digging Digger. |
 | `hasArm`, `hasHead` | The game drops the arm below 2/3 body health and the head below 1/3. |
 | `helm`, `shield` | `null`, or `{ type, damage }` (plus `health` in the full view). Helms: `cone`, `bucket`, `football_helmet`, `miner_hat`, `bobsled_helmet`, ... Shields: `screen_door`, `newspaper`, `ladder`. `damage` works like the plants' field. |
@@ -176,7 +176,7 @@ How a sent zombie counts for the game's early-wave check:
 
 The zombie seat's view (`view=zombies`) also shows the zombie side's own zombies that haven't walked on screen yet.
 
-### What the player view leaves out
+### What the plants' view leaves out
 
 - Exact health of plants, zombies and their armour. The `damage` stages and `hasArm`/`hasHead` show what the art shows.
 - `nextWaveIn` and `upcomingWaves`.
@@ -184,7 +184,7 @@ The zombie seat's view (`view=zombies`) also shows the zombie side's own zombies
 - `versusPending`, the full-view-only fields of `versus`, and its `held` and `refunds`.
 - Bungees' `targetCol`.
 
-Not handled yet: zombies hidden by fog (Adventure levels 31–40) and by Stormy Night's darkness still appear in the player view.
+Not handled yet: zombies hidden by fog (Adventure levels 31–40) and by Stormy Night's darkness still appear in the plants' view.
 
 ## How requests are carried out
 

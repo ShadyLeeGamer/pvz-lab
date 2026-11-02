@@ -26,7 +26,7 @@ namespace PvzLab
 		}
 	}
 
-	Snapshot PlayerView(const Snapshot& theFull)
+	Snapshot ScreenView(const Snapshot& theFull)
 	{
 		Snapshot aView = theFull;
 		aView.mFullView = false;
@@ -60,7 +60,7 @@ namespace PvzLab
 
 	Snapshot ZombiesView(const Snapshot& theFull)
 	{
-		Snapshot aView = PlayerView(theFull);
+		Snapshot aView = ScreenView(theFull);
 		aView.mZombiesView = true;
 		if (!theFull.mVersus || !aView.mVersus)
 			return aView;

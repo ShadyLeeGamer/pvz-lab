@@ -1,6 +1,6 @@
 {
   "apiVersion": 1,
-  "view": "player",
+  "view": "plants",
   "appTicks": 9527,
   "scene": "playing",
   "mode": "adventure",

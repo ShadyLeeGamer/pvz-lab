@@ -22,10 +22,10 @@ TEST_CASE("a menu snapshot has a null board")
 	CHECK(aJson.at("board").is_null());
 }
 
-TEST_CASE("the player view's JSON leaves out hidden fields")
+TEST_CASE("the plants' view's JSON leaves out hidden fields")
 {
-	json aJson = json::parse(SnapshotToJson(PlayerView(MakeLevelSnapshot())));
-	CHECK(aJson.at("view") == "player");
+	json aJson = json::parse(SnapshotToJson(ScreenView(MakeLevelSnapshot())));
+	CHECK(aJson.at("view") == "plants");
 
 	const json& aBoard = aJson.at("board");
 	CHECK(aBoard.at("levelName") == "1-1");
@@ -65,8 +65,8 @@ TEST_CASE("a versus level's JSON shows the zombie side's points and types; the f
 	CHECK(aVersus.at("waveHealthStart") == 0);
 	CHECK(aVersus.at("waveHealthTarget") == -1);
 
-	json aPlayer = json::parse(SnapshotToJson(PlayerView(MakeVersusSnapshot())));
-	const json& aShared = aPlayer.at("versus");
+	json aPlants = json::parse(SnapshotToJson(ScreenView(MakeVersusSnapshot())));
+	const json& aShared = aPlants.at("versus");
 	CHECK(aShared.at("points") == 3);
 	CHECK(aShared.at("types").size() == 2);
 	for (const char* aHidden : { "payTable", "wavesAtStart", "wavesNow", "waveHealthStart", "waveHealthTarget" })
@@ -88,10 +88,10 @@ TEST_CASE("only the zombie seat's JSON lists its held zombies and refunds; only 
 	CHECK(aZombies.at("versus").at("refunds") == json::array({ json{ { "zombie", "conehead_zombie" }, { "row", 0 }, { "reason", "too_many_zombies" } } }));
 	CHECK_FALSE(aZombies.at("versus").contains("sentIds"));
 
-	json aPlayer = json::parse(SnapshotToJson(PlayerView(MakeVersusSnapshot())));
-	CHECK_FALSE(aPlayer.at("versus").contains("held"));
-	CHECK_FALSE(aPlayer.at("versus").contains("refunds"));
-	CHECK_FALSE(aPlayer.at("board").at("zombies").at(1).contains("targetCol"));
+	json aPlants = json::parse(SnapshotToJson(ScreenView(MakeVersusSnapshot())));
+	CHECK_FALSE(aPlants.at("versus").contains("held"));
+	CHECK_FALSE(aPlants.at("versus").contains("refunds"));
+	CHECK_FALSE(aPlants.at("board").at("zombies").at(1).contains("targetCol"));
 
 	json aFull = json::parse(SnapshotToJson(MakeVersusSnapshot()));
 	CHECK(aFull.at("versus").at("sentIds") == json::array({ 2002, 2003 }));
@@ -127,7 +127,7 @@ TEST_CASE("a sendZombie reply names the zombie and the points left, or says it's
 TEST_CASE("without versus, the JSON has no versus field")
 {
 	CHECK_FALSE(json::parse(SnapshotToJson(MakeLevelSnapshot())).contains("versus"));
-	CHECK_FALSE(json::parse(SnapshotToJson(PlayerView(MakeLevelSnapshot()))).contains("versus"));
+	CHECK_FALSE(json::parse(SnapshotToJson(ScreenView(MakeLevelSnapshot()))).contains("versus"));
 	CHECK_FALSE(json::parse(SnapshotToJson(MakeLevelSnapshot())).contains("versusPending"));
 }
 
@@ -136,7 +136,7 @@ TEST_CASE("only the full view says a versus start is waiting for play to begin")
 	Snapshot aWaiting = MakeLevelSnapshot();
 	aWaiting.mVersusPending = true;
 	CHECK(json::parse(SnapshotToJson(aWaiting)).at("versusPending") == true);
-	CHECK_FALSE(json::parse(SnapshotToJson(PlayerView(aWaiting))).contains("versusPending"));
+	CHECK_FALSE(json::parse(SnapshotToJson(ScreenView(aWaiting))).contains("versusPending"));
 	CHECK_FALSE(json::parse(SnapshotToJson(ZombiesView(aWaiting))).contains("versusPending"));
 }
 
@@ -157,7 +157,7 @@ TEST_CASE("snapshots carry the clock, the shovel and where each packet can be pl
 	aSnapshot.mBoard->mShovel = true;
 	aSnapshot.mBoard->mSeedPackets[0].mPlantableTiles = { { 0, 2 }, { 1, 2 } };
 
-	json aJson = json::parse(SnapshotToJson(PlayerView(aSnapshot)));
+	json aJson = json::parse(SnapshotToJson(ScreenView(aSnapshot)));
 	CHECK(aJson.at("board").at("shovel") == true);
 	CHECK(aJson.at("clock").at("state") == "stepping");
 	CHECK(aJson.at("clock").at("speed") == 20);

@@ -248,7 +248,7 @@ namespace PvzLab
 		{
 			if (theSnapshot.mFullView)
 				return "full";
-			return theSnapshot.mZombiesView ? "zombies" : "player";
+			return theSnapshot.mZombiesView ? "zombies" : "plants";
 		}
 	}
 

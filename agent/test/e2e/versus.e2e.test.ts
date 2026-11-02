@@ -92,12 +92,12 @@ describe("versus levels (launches the game; needs agent/.env)", () => {
 
     // Both seats see the points and types, but not the full view's extras; the zombie seat also sees
     // the zombies it's holding and the points it got back.
-    const player = await api.state("player");
-    expect(player.view).toBe("player");
-    expect(player.versus).toEqual({ points: 0, wave: 0, types: versus.types });
+    const plants = await api.state("plants");
+    expect(plants.view).toBe("plants");
+    expect(plants.versus).toEqual({ points: 0, wave: 0, types: versus.types });
     const zombies = await api.state("zombies");
     expect(zombies.view).toBe("zombies");
-    expect(zombies.versus).toEqual({ ...player.versus, held: [], refunds: [] });
+    expect(zombies.versus).toEqual({ ...plants.versus, held: [], refunds: [] });
   });
 
   it("pays each normal wave as it arrives and each flag wave at its warning, keeps waves on their timer, and sends only flag zombies", async () => {

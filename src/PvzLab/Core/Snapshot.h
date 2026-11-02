@@ -10,7 +10,7 @@
 namespace PvzLab
 {
 	// Bump when a field is removed or changes meaning. Adding fields doesn't need a bump.
-	inline constexpr int kApiVersion = 1;
+	inline constexpr int kApiVersion = 2;
 
 	// What a player sees of an object's health: the game swaps its art below 2/3 and below 1/3.
 	enum class Damage
@@ -214,7 +214,7 @@ namespace PvzLab
 
 	struct Snapshot
 	{
-		bool							mFullView = true;		// false once PlayerView() has removed hidden information
+		bool							mFullView = true;		// false once ScreenView() has removed hidden information
 		bool							mZombiesView = false;	// ZombiesView(): what the zombie seat of a versus match sees
 		uint32_t						mAppTicks = 0;			// ticks since the game started
 		std::string						mScene;					// "loading", "menu", "level_intro", "playing", ...

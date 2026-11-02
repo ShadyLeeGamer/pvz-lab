@@ -17,16 +17,16 @@ TEST_CASE("damage stages use the game's art thresholds")
 
 TEST_CASE("both seats see the zombie side's points and types, and neither sees the full view's extras")
 {
-	Snapshot aPlayer = PlayerView(MakeVersusSnapshot());
-	REQUIRE(aPlayer.mVersus);
-	CHECK(aPlayer.mVersus->mPoints == 3);
-	CHECK(aPlayer.mVersus->mTypes.size() == 2);
-	CHECK_FALSE(aPlayer.mVersus->mPayTable);
-	CHECK_FALSE(aPlayer.mVersus->mWavesAtStart);
-	CHECK_FALSE(aPlayer.mVersus->mWavesNow);
-	CHECK_FALSE(aPlayer.mVersus->mWaveHealthStart);
-	CHECK_FALSE(aPlayer.mVersus->mWaveHealthTarget);
-	CHECK_FALSE(aPlayer.mZombiesView);
+	Snapshot aPlants = ScreenView(MakeVersusSnapshot());
+	REQUIRE(aPlants.mVersus);
+	CHECK(aPlants.mVersus->mPoints == 3);
+	CHECK(aPlants.mVersus->mTypes.size() == 2);
+	CHECK_FALSE(aPlants.mVersus->mPayTable);
+	CHECK_FALSE(aPlants.mVersus->mWavesAtStart);
+	CHECK_FALSE(aPlants.mVersus->mWavesNow);
+	CHECK_FALSE(aPlants.mVersus->mWaveHealthStart);
+	CHECK_FALSE(aPlants.mVersus->mWaveHealthTarget);
+	CHECK_FALSE(aPlants.mZombiesView);
 
 	Snapshot aZombies = ZombiesView(MakeVersusSnapshot());
 	CHECK(aZombies.mZombiesView);
@@ -37,14 +37,14 @@ TEST_CASE("both seats see the zombie side's points and types, and neither sees t
 	CHECK_FALSE(aZombies.mVersus->mSentIds);
 }
 
-TEST_CASE("the zombie seat also sees its own zombies on their way in, its held zombies and its refunds; a player sees none of them")
+TEST_CASE("the zombie seat also sees its own zombies on their way in, its held zombies and its refunds; the plants' seat sees none of them")
 {
-	Snapshot aPlayer = PlayerView(MakeVersusSnapshot());
-	REQUIRE(aPlayer.mBoard);
-	REQUIRE(aPlayer.mBoard->mZombies.size() == 2);	// the conehead and the bungee on screen
-	CHECK_FALSE(aPlayer.mBoard->mZombies[1].mTargetCol);
-	CHECK_FALSE(aPlayer.mVersus->mHeld);
-	CHECK_FALSE(aPlayer.mVersus->mRefunds);
+	Snapshot aPlants = ScreenView(MakeVersusSnapshot());
+	REQUIRE(aPlants.mBoard);
+	REQUIRE(aPlants.mBoard->mZombies.size() == 2);	// the conehead and the bungee on screen
+	CHECK_FALSE(aPlants.mBoard->mZombies[1].mTargetCol);
+	CHECK_FALSE(aPlants.mVersus->mHeld);
+	CHECK_FALSE(aPlants.mVersus->mRefunds);
 
 	Snapshot aZombies = ZombiesView(MakeVersusSnapshot());
 	REQUIRE(aZombies.mBoard);
@@ -65,9 +65,9 @@ TEST_CASE("the zombie seat also sees its own zombies on their way in, its held z
 	CHECK(aFull.mBoard->mZombies[2].mTargetCol == 4);
 }
 
-TEST_CASE("the player view hides what a player can't see")
+TEST_CASE("the screen view hides what a player can't see")
 {
-	Snapshot aView = PlayerView(MakeLevelSnapshot());
+	Snapshot aView = ScreenView(MakeLevelSnapshot());
 	CHECK_FALSE(aView.mFullView);
 	REQUIRE(aView.mBoard);
 
@@ -92,7 +92,7 @@ TEST_CASE("menus have no board in either view")
 {
 	Snapshot aMenu;
 	aMenu.mScene = "menu";
-	Snapshot aView = PlayerView(aMenu);
+	Snapshot aView = ScreenView(aMenu);
 	CHECK_FALSE(aView.mBoard);
 	CHECK(aView.mScene == "menu");
 }

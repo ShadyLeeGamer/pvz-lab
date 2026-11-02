@@ -134,10 +134,10 @@ namespace PvzLab
 
 		aServer.Get("/state", [&aMailbox](const httplib::Request& theRequest, httplib::Response& theResponse)
 		{
-			std::string aView = theRequest.has_param("view") ? theRequest.get_param_value("view") : "player";
-			if (aView != "player" && aView != "full" && aView != "zombies")
+			std::string aView = theRequest.has_param("view") ? theRequest.get_param_value("view") : "plants";
+			if (aView != "plants" && aView != "full" && aView != "zombies")
 			{
-				SendJson(theResponse, 400, ErrorToJson("bad_view", "view must be \"player\", \"zombies\" or \"full\""));
+				SendJson(theResponse, 400, ErrorToJson("bad_view", "view must be \"plants\", \"zombies\" or \"full\""));
 				return;
 			}
 
@@ -150,7 +150,7 @@ namespace PvzLab
 			if (aView == "full")
 				SendJson(theResponse, 200, SnapshotToJson(*aSnapshot));
 			else
-				SendJson(theResponse, 200, SnapshotToJson(aView == "zombies" ? ZombiesView(*aSnapshot) : PlayerView(*aSnapshot)));
+				SendJson(theResponse, 200, SnapshotToJson(aView == "zombies" ? ZombiesView(*aSnapshot) : ScreenView(*aSnapshot)));
 		});
 
 		aServer.Post("/actions", [&aMailbox](const httplib::Request& theRequest, httplib::Response& theResponse)

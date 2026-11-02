@@ -50,7 +50,7 @@ export class GameApi {
     return { status: response.status, body: JSON.parse(response.text) };
   }
 
-  async state(view: "player" | "zombies" | "full" = "player"): Promise<Json> {
+  async state(view: "plants" | "zombies" | "full" = "plants"): Promise<Json> {
     const { status, body } = await this.get(`/state?view=${view}`);
     expect(status).toBe(200);
     return body;

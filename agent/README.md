@@ -29,7 +29,7 @@ A session file in `sessions/` sets the level, the clock and the tools:
   - 1-10, 2-10 and 3-10 start, but their seed packets arrive on a conveyor belt, and no player has tried one yet.
   - Not supported: the levels that open with Crazy Dave talking (1-5, 2-1, 2-2, 2-5, 3-1, 3-5, 4-1, 4-5, 4-10, 5-1, 5-5 and 5-10).
   - Every run starts from the save template, which has 6 seed slots and no shop upgrades. So later levels are harder than in a normal playthrough.
-  - In the fog levels (world 4), the player view still shows zombies the fog would hide.
+  - In the fog levels (world 4), the plants' view still shows zombies the fog would hide.
 - `seeds`: the seed packets to bring, by name, for levels that make you choose. If they're missing or wrong, `pnpm play` lists the choices. On a level that doesn't let you choose, it stops and says so.
 - `clock`: `"waits"` pauses the game while the player thinks, so time only passes when it calls `wait` (so a `"waits"` session must offer `wait`). `"realtime"` keeps the game running.
 - `speed`: how fast game time runs whenever it runs, from 1 (normal, the default) to 50.
@@ -54,7 +54,7 @@ Ctrl+C stops a run cleanly. Claude Code and the game close, the temporary folder
 
 Each run is saved in `runs/` (not committed): the session, the brief, every tool call (`moves.jsonl`), Claude Code's own output (`claude.jsonl`) and `result.json`.
 
-The tools answer with a short text summary of the player view: a map of the lawn, then lists of seed packets, zombies and sun. Nothing hidden from a player, such as exact health or wave timers, is included.
+The tools answer with a short text summary of the plants' view: a map of the lawn, then lists of seed packets, zombies and sun. Nothing hidden from a player, such as exact health or wave timers, is included.
 
 ## Playing in a chat app
 

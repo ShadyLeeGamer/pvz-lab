@@ -84,9 +84,9 @@ const Versus = z.object({
   refunds: z.array(z.object({ zombie: z.string(), row: z.number().int(), reason: z.string() })).optional(),
 });
 
-// A seat's view only, the player's or the zombie seat's: this program never asks for the full view.
+// A seat's view only, the plants' or the zombies': this program never asks for the full view.
 export const GameState = z.object({
-  view: z.enum(["player", "zombies"]),
+  view: z.enum(["plants", "zombies"]),
   appTicks: z.number().int(),
   scene: z.string(),
   clock: z.object({ state: z.string(), speed: z.number().int() }),
@@ -155,7 +155,7 @@ export const BUSY_ATTEMPTS = 3;
 
 // What the rest of the program needs from the game. GameClient is the real one.
 export interface Game {
-  state(view?: View): Promise<GameState>; // the player's view unless the zombie seat's is asked for
+  state(view?: View): Promise<GameState>; // the plants' view unless the zombies' is asked for
   act(action: Action): Promise<Result>;
   control(command: Control): Promise<Result>;
 }
@@ -167,7 +167,7 @@ export class GameClient implements Game {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
-  async state(view: View = "player"): Promise<GameState> {
+  async state(view: View = "plants"): Promise<GameState> {
     const response = await this.request(`/state?view=${view}`);
     if (!response.ok) throw new Error(`GET /state answered ${response.status}: ${await response.text()}`);
     return GameState.parse(await response.json());

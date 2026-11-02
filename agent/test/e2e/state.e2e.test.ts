@@ -22,18 +22,18 @@ describe("local API (launches the game; needs agent/.env)", () => {
   it("reports health and the build", async () => {
     const { status, body } = await getJson(`${game!.baseUrl}/health`);
     expect(status).toBe(200);
-    expect(body.apiVersion).toBe(1);
+    expect(body.apiVersion).toBe(2);
     expect(body.ok).toBe(true);
     expect(body.build.commit).toMatch(/^[0-9a-f]{7,}/);
     // The launcher waits for this, because a game still loading can be too busy to pick requests up.
     expect(body.loaded).toBe(true);
   });
 
-  it("returns the player view by default, with no board outside a level", async () => {
+  it("returns the plants' view by default, with no board outside a level", async () => {
     // The first snapshot arrives with the first game tick.
     await expect.poll(async () => (await getJson(`${game!.baseUrl}/state`)).status, { timeout: 10_000 }).toBe(200);
     const { body } = await getJson(`${game!.baseUrl}/state`);
-    expect(body.view).toBe("player");
+    expect(body.view).toBe("plants");
     expect(["loading", "menu"]).toContain(body.scene);
     expect(body.board).toBeNull();
   });

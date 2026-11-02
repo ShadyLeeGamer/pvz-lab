@@ -1,5 +1,5 @@
 // Saves real game states for the unit tests: launches the game, plays a little through the API,
-// and writes /state (the player view) at interesting moments into this folder. The game's replies
+// and writes /state (the plants' view) at interesting moments into this folder. The game's replies
 // to a few requests go into replies.json, so the tests never need to make one up.
 // Run with `pnpm fixtures:capture` (needs agent/.env, like the end-to-end tests). With --replies-only it
 // refreshes replies.json and leaves the saved states, and the tests written against them, alone. Naming

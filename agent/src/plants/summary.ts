@@ -1,5 +1,5 @@
 // Turns the game state into the short text the plants' side reads: a map of the lawn, then the details
-// as lists. It only ever gets the player view, so nothing hidden from a player can reach Claude.
+// as lists. It only ever gets the plants' view, so nothing hidden from a player can reach Claude.
 import { lawnLines, levelLines, packetLine, plantSymbols, words, zombieLine } from "../board-text.ts";
 import type { BoardState, GameState } from "../game-client.ts";
 

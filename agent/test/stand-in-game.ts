@@ -26,7 +26,7 @@ export class StandInGame implements Game {
     this.states = states;
   }
 
-  async state(view: View = "player"): Promise<GameState> {
+  async state(view: View = "plants"): Promise<GameState> {
     this.views.push(view);
     return this.states.length > 1 ? this.states.shift()! : this.states[0]!;
   }

@@ -110,7 +110,7 @@ describe("sending zombies in versus levels (launches the game; needs agent/.env)
     const sent = full.board.zombies.find((z: Json) => z.id === body.zombie.id);
     expect(sent).toMatchObject({ type: "zombie", row: 1, onScreen: false });
     expect(full.versus.sentIds).toContain(body.zombie.id);
-    expect((await api.state("player")).board.zombies.map((z: Json) => z.id)).not.toContain(body.zombie.id);
+    expect((await api.state("plants")).board.zombies.map((z: Json) => z.id)).not.toContain(body.zombie.id);
     expect((await api.state("zombies")).board.zombies.map((z: Json) => z.id)).toContain(body.zombie.id);
   });
 
