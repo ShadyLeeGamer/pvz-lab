@@ -15,6 +15,12 @@ function plantNote(plant: Plant): string | undefined {
   return notes.length > 0 ? `- ${plant.type} at column ${plant.col}, row ${plant.row}: ${notes.join(", ")}` : undefined;
 }
 
+// In a versus level a player sends the zombies, paid by each wave, and its points are no secret.
+function zombieSideLine(versus: NonNullable<GameState["versus"]>): string {
+  if (versus.wave === 0) return "The zombie side has no points yet: the first wave pays it when it arrives.";
+  return `The zombie side has ${versus.points} point${versus.points === 1 ? "" : "s"} left to spend on wave ${versus.wave}.`;
+}
+
 export interface SummaryOptions {
   shovel?: boolean; // the player can dig plants up, so say when the level has no shovel
 }
@@ -29,9 +35,11 @@ export function summarizePlants(state: GameState, options: SummaryOptions = {}):
   const lines: string[] = [];
   if (board.result === "won") lines.push(`You won level ${board.levelName}!`);
   if (board.result === "lost") lines.push(`The zombies got into your house. Level ${board.levelName} is lost.`);
+  if (state.scene === "level_intro") lines.push("The level hasn't started yet: it's waiting for its seed packets to be chosen.");
   lines.push(...levelLines(state, board));
   const flying = board.sunSpendable - board.sun;
   lines.push(`Sun: ${board.sunSpendable} to spend${flying > 0 ? ` (${flying} of it still flying to the counter)` : ""}.`);
+  if (state.versus) lines.push(zombieSideLine(state.versus));
 
   lines.push("", "Seed packets:", ...board.seedPackets.map((packet) => packetLine(packet, board.sunSpendable)));
   if (options.shovel && !board.shovel) lines.push("This level has no shovel, so nothing can be dug up.");

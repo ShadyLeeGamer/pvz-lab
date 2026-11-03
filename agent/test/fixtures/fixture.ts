@@ -14,8 +14,17 @@ export type FixtureName =
   | "1-9-versus-start"
   | "1-9-versus-midgame"
   | "1-9-versus-warning"
-  | "1-2-versus-lost";
+  | "1-2-versus-lost"
+  // The plants' view of a versus level: waiting at its seed chooser, at the first moment of play, and
+  // once the first wave has paid.
+  | "1-9-versus-chooser"
+  | "1-9-versus-plants-start"
+  | "1-9-versus-plants";
 export type ReplyName =
+  | "seeds-asked-at-chooser"
+  | "seeds-refused-at-chooser"
+  | "seeds-chosen"
+  | "not-at-seed-chooser"
   | "zombie-sent"
   | "zombie-held"
   | "zombie-refused"

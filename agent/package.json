@@ -13,6 +13,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "fixtures:capture": "node test/fixtures/capture.ts",
     "play": "node src/play.ts",
+    "match": "node src/match.ts",
     "typecheck": "tsc"
   },
   "devDependencies": {

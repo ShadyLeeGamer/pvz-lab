@@ -199,5 +199,105 @@
       "held": true,
       "points": 7
     }
+  },
+  "seeds-asked-at-chooser": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "bad_seeds",
+        "message": "this level makes you choose 6 seeds; \"seeds\" has 0",
+        "choices": [
+          "peashooter",
+          "sunflower",
+          "cherry_bomb",
+          "wall_nut",
+          "potato_mine",
+          "snow_pea",
+          "chomper",
+          "repeater"
+        ],
+        "costs": [
+          100,
+          50,
+          150,
+          50,
+          25,
+          175,
+          150,
+          200
+        ],
+        "pick": 6,
+        "zombies": [
+          "zombie",
+          "conehead_zombie",
+          "pole_vaulting_zombie",
+          "buckethead_zombie"
+        ]
+      }
+    }
+  },
+  "seeds-chosen": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "appTicks": 997,
+      "level": 9,
+      "levelName": "1-9",
+      "zombies": [
+        "zombie",
+        "conehead_zombie",
+        "pole_vaulting_zombie",
+        "buckethead_zombie"
+      ],
+      "clock": {
+        "state": "frozen",
+        "speed": 1
+      }
+    }
+  },
+  "not-at-seed-chooser": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "not_at_seed_chooser",
+        "message": "no seed chooser is open right now"
+      }
+    }
+  },
+  "seeds-refused-at-chooser": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "bad_seeds",
+        "message": "this level makes you choose 6 seeds; \"seeds\" has 1",
+        "choices": [
+          "peashooter",
+          "sunflower",
+          "cherry_bomb",
+          "wall_nut",
+          "potato_mine",
+          "snow_pea",
+          "chomper",
+          "repeater"
+        ],
+        "costs": [
+          100,
+          50,
+          150,
+          50,
+          25,
+          175,
+          150,
+          200
+        ],
+        "pick": 6,
+        "zombies": [
+          "zombie",
+          "conehead_zombie",
+          "pole_vaulting_zombie",
+          "buckethead_zombie"
+        ]
+      }
+    }
   }
 }

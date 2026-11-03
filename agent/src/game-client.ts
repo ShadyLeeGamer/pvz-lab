@@ -146,7 +146,8 @@ export type Control =
   | { type: "freeze" }
   | { type: "run"; speed?: number }
   | { type: "step"; ticks: number; speed?: number }
-  | { type: "startLevel"; level?: number | string; seeds?: string[]; then?: "freeze" | "run" };
+  | { type: "startLevel"; level?: number | string; seeds?: string[]; then?: "freeze" | "run"; versus?: boolean }
+  | { type: "chooseSeeds"; seeds: string[]; then?: "freeze" | "run" };
 
 // How many times a request is sent while the game answers "busy". Busy means the game didn't pick the
 // request up within 2 s and withdrew it, so nothing happened and sending it again is safe. The game's

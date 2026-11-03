@@ -31,6 +31,9 @@ function plantRules({ clock, speed, tools }: Session): string[] {
   if (has("start_level")) {
     rules.push("Start a level with start_level. From 1-8 on, a level first asks which seed packets to bring: start_level shows the choices and what each costs.");
   }
+  if (has("choose_seeds")) {
+    rules.push("The level waits at its seed chooser until you choose which seed packets to bring: choose_seeds shows the choices and what each costs, then picks them.");
+  }
   if (clock === "waits") {
     rules.push("The game is paused while you think. Game time only passes when you call wait, and you choose how long each wait is.");
   } else {

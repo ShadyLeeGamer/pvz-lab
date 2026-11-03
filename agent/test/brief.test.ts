@@ -35,6 +35,22 @@ Play the level to the end on your own. When a tool says the level is over, stop.
     expect(text).not.toMatch(/\{\w+\}/);
   });
 
+  it("tells a match's plants how to choose their seeds, and that another player sends the zombies", () => {
+    const versus = readFileSync(new URL("../prompts/plants-versus.md", import.meta.url), "utf8");
+    const tools: Session["tools"] = ["choose_seeds", "get_state", "place_plant", "dig_up", "collect_sun", "wait"];
+    const text = writeBrief(versus, session({ level: "1-9", clock: "realtime", tools }));
+    expect(text.split("\n")[0]).toBe("You are playing the plants in Plants vs. Zombies, Adventure level 1-9, using the tools you've been given. Someone else plays the zombies.");
+    expect(text).toContain(
+      "How the game works here:\n" +
+        "- The level waits at its seed chooser until you choose which seed packets to bring: choose_seeds shows the choices and what each costs, then picks them.\n" +
+        "- The game keeps running while you think",
+    );
+    expect(text).toContain("each wave pays the other player points");
+    expect(text).not.toMatch(/\{\w+\}/);
+    // A player without choose_seeds is never told about it.
+    expect(writeBrief(template, session({}))).not.toContain("choose_seeds");
+  });
+
   it("tells a player with dig_up what digging up a plant does", () => {
     const text = writeBrief(template, session({ level: "1-7", tools: ["get_state", "place_plant", "dig_up", "collect_sun", "wait"] }));
     expect(text).toContain(

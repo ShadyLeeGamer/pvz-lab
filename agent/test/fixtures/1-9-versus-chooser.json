@@ -1,0 +1,49 @@
+{
+  "apiVersion": 2,
+  "view": "plants",
+  "appTicks": 585,
+  "scene": "level_intro",
+  "mode": "adventure",
+  "modeId": 0,
+  "clock": {
+    "state": "frozen",
+    "speed": 1
+  },
+  "dialogOpen": false,
+  "minimized": false,
+  "board": {
+    "level": 9,
+    "levelName": "1-9",
+    "stage": "day",
+    "paused": false,
+    "gameTicks": 0,
+    "boardTicks": 450,
+    "result": "playing",
+    "sun": 50,
+    "sunSpendable": 50,
+    "shovel": false,
+    "seedPackets": [],
+    "lawn": {
+      "rows": [
+        "grass",
+        "grass",
+        "grass",
+        "grass",
+        "grass"
+      ],
+      "items": [],
+      "ice": []
+    },
+    "plants": [],
+    "zombies": [],
+    "suns": [],
+    "award": null,
+    "mowers": [],
+    "progress": {
+      "wave": 0,
+      "totalWaves": 20,
+      "meter": 0,
+      "hugeWaveIncoming": false
+    }
+  }
+}

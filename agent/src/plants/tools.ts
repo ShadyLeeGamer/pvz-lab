@@ -40,12 +40,12 @@ async function look(context: ToolContext): Promise<{ state: GameState; levelName
   return { state: await finishWonLevel(context, first), levelName: first.board?.levelName };
 }
 
-// What start_level says when a level asks which seed packets to bring, like the seed chooser screen.
-function seedChoice(level: string, error: ApiError, triedSeeds: boolean): string {
+// What start_level or choose_seeds says when a level asks which seed packets to bring, like the seed
+// chooser screen. why comes first: the level's question, or why the seeds given weren't taken.
+function seedChoice(error: ApiError, tool: ToolName, why: string): string {
   const choices = (error.choices ?? []).map((plant, i) => (error.costs?.[i] === undefined ? plant : `${plant} (${error.costs[i]} sun)`));
-  const why = triedSeeds ? `Level ${level} didn't start: ${error.message}.` : `Level ${level} asks you to choose ${error.pick} seed packets first.`;
   const street = streetLine(error.zombies);
-  return `${why}\n${street ? `${street}\n` : ""}You can choose from: ${choices.join(", ")}.\nCall start_level again with the ${error.pick} you pick.`;
+  return `${why}\n${street ? `${street}\n` : ""}You can choose from: ${choices.join(", ")}.\nCall ${tool} again with the ${error.pick} you pick.`;
 }
 
 export function registerPlantTools(server: McpServer, tools: readonly ToolName[], context: ToolContext): void {
@@ -83,7 +83,10 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
           const seeds = input.seeds?.map(normalizeName);
           const result = await game.control({ type: "startLevel", level: input.level, seeds, then: "freeze" });
           if (!result.ok) {
-            if (result.error.code === "bad_seeds" && result.error.choices) return reply(seedChoice(input.level, result.error, seeds !== undefined), seeds !== undefined);
+            if (result.error.code === "bad_seeds" && result.error.choices) {
+              const why = seeds ? `Level ${input.level} didn't start: ${result.error.message}.` : `Level ${input.level} asks you to choose ${result.error.pick} seed packets first.`;
+              return reply(seedChoice(result.error, "start_level", why), seeds !== undefined);
+            }
             if (result.error.code === "needs_input") return reply(`Level ${input.level} isn't supported yet: it opens with Crazy Dave talking.`, true);
             return reply(`Level ${input.level} didn't start: ${result.error.message}.`, true);
           }
@@ -94,6 +97,37 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
           const how = context.clock === "waits" ? "The game is paused while you think." : "The game is running.";
           const street = streetLine(result.reply.zombies);
           return reply(`Level ${input.level} started. ${how}\n${street ? `${street}\n` : ""}\n${summarizePlants(await game.state(), summary)}`);
+        }),
+    );
+  }
+
+  // For a level someone else started, such as a match's host: it waits at its seed chooser. Picking
+  // starts play, and whoever started the level runs game time from then on.
+  if (enabled.has("choose_seeds")) {
+    server.registerTool(
+      "choose_seeds",
+      {
+        title: "Choose seed packets",
+        description:
+          "Picks the seed packets to bring, on the seed chooser the level is waiting at. Call it without seeds to see the choices " +
+          "and their costs, then again with the ones you pick. Play starts once they're picked.",
+        inputSchema: {
+          seeds: z.array(z.string().min(1)).optional().describe("The seed packets to bring, by name."),
+        },
+      },
+      (input) =>
+        logged(context, "choose_seeds", input, async () => {
+          const seeds = input.seeds?.map(normalizeName);
+          const result = await game.control({ type: "chooseSeeds", seeds: seeds ?? [] });
+          if (!result.ok) {
+            if (result.error.code === "bad_seeds" && result.error.choices) {
+              const why = seeds ? `Not chosen: ${result.error.message}.` : `The level asks you to choose ${result.error.pick} seed packets.`;
+              return reply(seedChoice(result.error, "choose_seeds", why), seeds !== undefined);
+            }
+            if (result.error.code === "not_at_seed_chooser") return reply("There's no seed chooser open: the seed packets are already chosen.", true);
+            return reply(`Not chosen: ${result.error.message}.`, true);
+          }
+          return reply(`Chose ${(seeds ?? []).join(", ")}. Play is starting.\n\n${await show()}`);
         }),
     );
   }

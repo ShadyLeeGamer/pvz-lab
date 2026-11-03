@@ -62,6 +62,14 @@ describe("loadSession", () => {
     );
   });
 
+  it("lets the plants choose seeds at a level started for them, which needs the level and no seeds of its own", async () => {
+    const match = { level: "1-9", clock: "realtime", tools: ["choose_seeds", "get_state", "wait"], brief: "b.md" };
+    expect((await loadSession(await write(match))).settings.tools).toEqual(["choose_seeds", "get_state", "wait"]);
+    await expect(loadSession(await write({ ...match, seeds: ["peashooter"] }))).rejects.toThrow(/with "choose_seeds" the player picks the seeds/);
+    await expect(loadSession(await write({ ...match, level: undefined }))).rejects.toThrow(/with "choose_seeds" the player picks the seeds/);
+    await expect(loadSession(await write({ ...match, side: "zombies", tools: ["choose_seeds", "send_zombie"] }))).rejects.toThrow(/the zombies' side takes/);
+  });
+
   it("gives each side only its own tools, and the zombie side a real-time game with no seeds", async () => {
     const zombies = { side: "zombies", level: "1-9", clock: "realtime", tools: ["get_state", "send_zombie", "wait"], brief: "b.md" };
     expect((await loadSession(await write(zombies))).settings).toMatchObject({ side: "zombies", clock: "realtime", tools: ["get_state", "send_zombie", "wait"] });

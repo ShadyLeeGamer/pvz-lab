@@ -55,4 +55,18 @@ describe("summarizePlants", () => {
   it("says when there's no lawn to show", () => {
     expect(summarizePlants(fixture("award-screen"))).toBe("Level won! The game is showing the award screen.");
   });
+
+  it("says when the level is still waiting for its seed packets to be chosen", () => {
+    const waiting = "The level hasn't started yet: it's waiting for its seed packets to be chosen.";
+    expect(summarizePlants(fixture("1-9-versus-chooser")).split("\n")[0]).toBe(waiting);
+    expect(summarizePlants(fixture("1-9-versus-plants-start"))).not.toContain(waiting);
+  });
+
+  it("in a versus level, shows the zombie side's points under the sun; in a normal level, no zombie side", () => {
+    expect(summarizePlants(fixture("1-9-versus-plants-start"))).toContain(
+      "Sun: 50 to spend.\nThe zombie side has no points yet: the first wave pays it when it arrives.\n",
+    );
+    expect(summarizePlants(fixture("1-9-versus-plants"))).toContain("Sun: 25 to spend.\nThe zombie side has 1 point left to spend on wave 1.\n");
+    expect(summarizePlants(fixture("1-8-midgame"))).not.toContain("zombie side");
+  });
 });

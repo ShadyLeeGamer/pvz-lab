@@ -3,7 +3,8 @@
 // to a few requests go into replies.json, so the tests never need to make one up.
 // Run with `pnpm fixtures:capture` (needs agent/.env, like the end-to-end tests). With --replies-only it
 // refreshes replies.json and leaves the saved states, and the tests written against them, alone. Naming
-// parts captures only those, e.g. `pnpm fixtures:capture versus`: the parts are "classic" and "versus".
+// parts captures only those, e.g. `pnpm fixtures:capture versus`: the parts are "classic", "versus" and
+// "match".
 import { readFile, writeFile } from "node:fs/promises";
 import { launchGame, readGameConfig } from "../../src/game-process.ts";
 
@@ -189,9 +190,33 @@ async function versus(): Promise<void> {
   await save("1-2-versus-lost", lost);
 }
 
+// A match's plant seat: a versus level waiting at its seed chooser, the game's answers to chooseSeeds,
+// and the plants' view once the zombie side has been paid.
+async function match(): Promise<void> {
+  const started = await send("/control", { type: "startLevel", level: "1-9", versus: true });
+  if (started.status !== 409) throw new Error(`expected 1-9 to wait at its seed chooser, got ${started.status} ${JSON.stringify(started.body)}`);
+  await save("1-9-versus-chooser", await state());
+
+  const asked = await send("/control", { type: "chooseSeeds", seeds: [] });
+  if (asked.status !== 409) throw new Error(`expected chooseSeeds with no seeds to list the choices, got ${asked.status} ${JSON.stringify(asked.body)}`);
+  keep("seeds-asked-at-chooser", asked);
+  const { choices, pick } = asked.body.error;
+  const tooFew = await send("/control", { type: "chooseSeeds", seeds: choices.slice(0, 1) });
+  if (tooFew.status !== 409) throw new Error(`expected one seed to be refused, got ${tooFew.status} ${JSON.stringify(tooFew.body)}`);
+  keep("seeds-refused-at-chooser", tooFew);
+  keep("seeds-chosen", await post("/control", { type: "chooseSeeds", seeds: choices.slice(0, pick) }));
+  await save("1-9-versus-plants-start", await state());
+  const again = await send("/control", { type: "chooseSeeds", seeds: choices.slice(0, pick) });
+  if (again.status !== 409) throw new Error(`expected a second chooseSeeds to be refused, got ${again.status} ${JSON.stringify(again.body)}`);
+  keep("not-at-seed-chooser", again);
+
+  await save("1-9-versus-plants", await playUntil((s) => s.versus.wave >= 1, false));
+}
+
 try {
   if (wanted("classic")) await classic();
   if (wanted("versus")) await versus();
+  if (wanted("match")) await match();
   await save("replies", replies);
 } finally {
   await game.stop();

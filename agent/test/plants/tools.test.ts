@@ -203,6 +203,60 @@ describe("MCP tools", () => {
   });
 });
 
+describe("choose_seeds, for a level someone else started", () => {
+  const MATCH_TOOLS: ToolName[] = ["choose_seeds", ...ALL_TOOLS];
+  const SEEDS = ["peashooter", "sunflower", "cherry_bomb", "wall_nut", "potato_mine", "snow_pea"];
+
+  it("is only offered when the session lists it", async () => {
+    const offered = async (tools: ToolName[]) => (await (await connect(new StandInGame(fixture("1-9-versus-chooser")), tools)).listTools()).tools.map((tool) => tool.name);
+    expect(await offered(MATCH_TOOLS)).toContain("choose_seeds");
+    expect(await offered(ALL_TOOLS)).not.toContain("choose_seeds");
+  });
+
+  it("shows what the level offers to bring, and what each costs, as the seed chooser does", async () => {
+    const game = new StandInGame(fixture("1-9-versus-chooser"));
+    game.controlReplies.chooseSeeds = reply("seeds-asked-at-chooser");
+    const { text, isError } = await call(await connect(game, MATCH_TOOLS, { clock: "realtime" }), "choose_seeds");
+    expect(game.controls).toEqual([{ type: "chooseSeeds", seeds: [] }]);
+    expect(isError).toBe(false);
+    expect(text).toBe(
+      "The level asks you to choose 6 seed packets.\n" +
+        "The street shows the zombies coming in this level: zombie, conehead_zombie, pole_vaulting_zombie, buckethead_zombie.\n" +
+        "You can choose from: peashooter (100 sun), sunflower (50 sun), cherry_bomb (150 sun), wall_nut (50 sun), " +
+        "potato_mine (25 sun), snow_pea (175 sun), chomper (150 sun), repeater (200 sun).\n" +
+        "Call choose_seeds again with the 6 you pick.",
+    );
+  });
+
+  it("says why the game didn't take the seeds given, with the choices again", async () => {
+    const game = new StandInGame(fixture("1-9-versus-chooser"));
+    game.controlReplies.chooseSeeds = reply("seeds-refused-at-chooser");
+    const { text, isError } = await call(await connect(game, MATCH_TOOLS, { clock: "realtime" }), "choose_seeds", { seeds: ["peashooter"] });
+    expect(isError).toBe(true);
+    expect(text.split("\n")[0]).toBe('Not chosen: this level makes you choose 6 seeds; "seeds" has 1.');
+    expect(text).toContain("Call choose_seeds again with the 6 you pick.");
+  });
+
+  it("picks the seeds in the game's names, then shows the game with the zombie side's points", async () => {
+    const game = new StandInGame(fixture("1-9-versus-plants"));
+    game.controlReplies.chooseSeeds = reply("seeds-chosen");
+    const named = ["Peashooter", "Sunflower", "Cherry Bomb", "Wall-nut", "Potato Mine", "Snow Pea"];
+    const { text, isError } = await call(await connect(game, MATCH_TOOLS, { clock: "realtime" }), "choose_seeds", { seeds: named });
+    expect(game.controls).toEqual([{ type: "chooseSeeds", seeds: SEEDS }]);
+    expect(isError).toBe(false);
+    expect(text.split("\n")[0]).toBe(`Chose ${SEEDS.join(", ")}. Play is starting.`);
+    expect(text).toContain("The zombie side has 1 point left to spend on wave 1.");
+  });
+
+  it("says when there's no seed chooser to pick from", async () => {
+    const game = new StandInGame(fixture("1-9-versus-plants"));
+    game.controlReplies.chooseSeeds = reply("not-at-seed-chooser");
+    const { text, isError } = await call(await connect(game, MATCH_TOOLS, { clock: "realtime" }), "choose_seeds", { seeds: SEEDS });
+    expect(isError).toBe(true);
+    expect(text).toBe("There's no seed chooser open: the seed packets are already chosen.");
+  });
+});
+
 describe("start_level, for chat apps", () => {
   const CHAT_TOOLS: ToolName[] = ["start_level", ...ALL_TOOLS];
   const NO_GAME_YET = "No level is being played yet. Start one with start_level.";
