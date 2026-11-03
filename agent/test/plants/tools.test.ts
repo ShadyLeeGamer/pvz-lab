@@ -9,7 +9,7 @@ import type { Game } from "../../src/game-client.ts";
 import type { GameStarter } from "../../src/mcp/own-game.ts";
 import { registerPlantTools } from "../../src/plants/tools.ts";
 import type { ToolName } from "../../src/session.ts";
-import { fixture, reply, savedReply } from "../fixtures/fixture.ts";
+import { fixture, fixtureAt, reply, savedReply } from "../fixtures/fixture.ts";
 import { StandInGame } from "../stand-in-game.ts";
 
 // Stands in for the server's own game in a chat app: it only records that it was started.
@@ -149,17 +149,35 @@ describe("MCP tools", () => {
     expect(text.split("\n")[0]).toBe("2.5 s passed.");
   });
 
-  it("in real time, wait only waits, for the game seconds asked for at the session's speed", async () => {
-    const game = new StandInGame(fixture("1-1-zombie"));
+  it("in real time, wait only waits, for the game seconds asked for at the session's speed, and says how many passed", async () => {
+    // By the time the wait looks again, the game has moved on 0.57 s.
+    const game = new StandInGame(fixture("1-1-zombie"), fixtureAt("1-1-zombie", 1501 + 57));
     const client = await connect(game, ALL_TOOLS, { clock: "realtime", speed: 10 });
     const start = performance.now();
     const { text } = await call(client, "wait", { seconds: 0.5 });
     const elapsed = performance.now() - start;
     expect(game.controls).toEqual([]);
-    expect(text.split("\n")[0]).toBe("0.5 s passed.");
+    expect(text.split("\n")[0]).toBe("0.6 s passed.");
     // 0.5 s of game time at 10x is 50 ms; unscaled it would be 500 ms.
     expect(elapsed).toBeGreaterThanOrEqual(45);
     expect(elapsed).toBeLessThan(400);
+  });
+
+  it("in real time, wait goes by the game's clock: it waits on while game time stands still, as at a match's start", async () => {
+    // 8 s of game time at 50x takes 160 ms, but the game was frozen for part of it: only 5.8 s had passed
+    // when the wait looked, so it waits on for the rest.
+    const game = new StandInGame(fixture("1-1-zombie"), fixtureAt("1-1-zombie", 1501 + 580), fixtureAt("1-1-zombie", 1501 + 800));
+    const { text } = await call(await connect(game, ALL_TOOLS, { clock: "realtime", speed: 50 }), "wait", { seconds: 8 });
+    expect(game.views).toHaveLength(3);
+    expect(text.split("\n")[0]).toBe("8 s passed.");
+    expect(text).toContain("Game time 23.0 s.");
+  });
+
+  it("in real time, a wait that sees the win collects the award and says the level is over", async () => {
+    const game = new StandInGame(fixture("1-1-zombie"), fixtureAt("1-1-won", 1501 + 50), fixture("award-screen"));
+    const { text } = await call(await connect(game, ALL_TOOLS, { clock: "realtime", speed: 50 }), "wait", { seconds: 1 });
+    expect(game.actions).toEqual([{ type: "collectAward" }]);
+    expect(text).toBe("0.5 s passed.\n\nYou won level 1-1! The level is over, so you can stop playing.");
   });
 
   it("collects the award for Claude when a wait wins the level, then says to stop", async () => {

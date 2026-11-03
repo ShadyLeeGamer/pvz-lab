@@ -4,13 +4,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { streetLine } from "../board-text.ts";
 import type { ApiError, GameState } from "../game-client.ts";
-import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, type ToolContext } from "../mcp/shared.ts";
+import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, TICKS_PER_SECOND, type ToolContext, waitGameTime } from "../mcp/shared.ts";
 import type { ToolName } from "../session.ts";
 import { summarizePlants } from "./summary.ts";
 
 const NO_GAME_YET = "No level is being played yet. Start one with start_level.";
-
-const TICKS_PER_SECOND = 100;
 
 function endOfLevel(state: GameState, levelName = state.board?.levelName): string {
   const stop = "The level is over, so you can stop playing.";
@@ -56,9 +54,10 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
   const summary = { shovel: enabled.has("dig_up") };
 
   // What a tool shows after acting: the game, or the end of the level if it ended meanwhile.
+  const describe = (state: GameState, levelName?: string): string => (levelIsOver(state) ? endOfLevel(state, levelName) : summarizePlants(state, summary));
   const show = async (levelName?: string): Promise<string> => {
     const now = await look(context);
-    return levelIsOver(now.state) ? endOfLevel(now.state, now.levelName ?? levelName) : summarizePlants(now.state, summary);
+    return describe(now.state, now.levelName ?? levelName);
   };
   // In a chat app nothing runs until the first start_level.
   const noGameYet = (): boolean => context.starter !== undefined && !context.starter.started;
@@ -250,10 +249,10 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
             const ticks = Math.max(1, Math.round(input.seconds * TICKS_PER_SECOND));
             const result = await game.control({ type: "step", ticks, speed: context.speed });
             if (!result.ok) return reply(`Time didn't pass: ${result.error.message}.`, true);
-          } else {
-            await sleep((input.seconds * 1000) / context.speed); // the game runs at that speed, so this is `seconds` of game time
+            return reply(`${input.seconds} s passed.\n\n${await show(levelName)}`);
           }
-          return reply(`${input.seconds} s passed.\n\n${await show(levelName)}`);
+          const { state, line } = await waitGameTime(input.seconds, context.speed, before, () => game.state(), levelIsOver);
+          return reply(`${line}\n\n${describe(await finishWonLevel(context, state), levelName)}`);
         }),
     );
   }

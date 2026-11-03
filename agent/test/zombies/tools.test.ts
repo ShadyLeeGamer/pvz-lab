@@ -7,7 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import type { Game } from "../../src/game-client.ts";
 import { registerZombieTools } from "../../src/zombies/tools.ts";
-import { fixture, reply } from "../fixtures/fixture.ts";
+import { fixture, fixtureAt, reply } from "../fixtures/fixture.ts";
 import { StandInGame } from "../stand-in-game.ts";
 
 async function connect(game: Game, speed = 1): Promise<Client> {
@@ -83,7 +83,8 @@ describe("zombie tools", () => {
   });
 
   it("wait ends early when a wave pays, and says when it's a huge wave", async () => {
-    const game = new StandInGame(fixture("1-9-versus-midgame"), fixture("1-9-versus-midgame"), fixture("1-9-versus-warning"));
+    // The payday comes half a second of game time in, long before the 30 s are up.
+    const game = new StandInGame(fixture("1-9-versus-midgame"), fixture("1-9-versus-midgame"), fixtureAt("1-9-versus-warning", 9601 + 50));
     const started = Date.now();
     const { text } = await call(await connect(game), "wait", { seconds: 30 });
     expect(Date.now() - started).toBeLessThan(5000);
@@ -91,18 +92,36 @@ describe("zombie tools", () => {
   });
 
   it("wait lets its seconds pass at the session's speed when no wave pays", async () => {
-    const game = new StandInGame(fixture("1-9-versus-midgame"));
+    const game = new StandInGame(fixture("1-9-versus-midgame"), fixtureAt("1-9-versus-midgame", 9601 + 200));
     const started = Date.now();
-    // 2 s of game time at 4 times normal speed is half a second.
-    const { text } = await call(await connect(game, 4), "wait", { seconds: 2 });
+    // 2 s of game time at 40 times normal speed is 50 ms, sooner than the 250 ms it looks for a payday.
+    const { text } = await call(await connect(game, 40), "wait", { seconds: 2 });
     const took = Date.now() - started;
-    expect(took).toBeGreaterThanOrEqual(450);
-    expect(took).toBeLessThan(1500);
+    expect(took).toBeGreaterThanOrEqual(45);
+    expect(took).toBeLessThan(240);
     expect(text.split("\n")[0]).toBe("2 s passed.");
   });
 
+  it("wait goes by the game's clock: it waits on while game time stands still", async () => {
+    // 2 s of game time at 40x takes 50 ms, but game time stood still at the first look and then moved
+    // on 1 s at a time, so the wait looks three times after the first.
+    const game = new StandInGame(
+      fixture("1-9-versus-midgame"),
+      fixture("1-9-versus-midgame"),
+      fixtureAt("1-9-versus-midgame", 9601 + 100),
+      fixtureAt("1-9-versus-midgame", 9601 + 200),
+    );
+    const { text } = await call(await connect(game, 40), "wait", { seconds: 2 });
+    expect(game.views).toHaveLength(4);
+    expect(text.split("\n")[0]).toBe("2 s passed.");
+    expect(text).toContain("Game time 98.0 s.");
+  });
+
   it("wait ends when the level does, with the result told from the zombies' side", async () => {
-    const game = new StandInGame(fixture("1-9-versus-midgame"), fixture("1-2-versus-lost"));
+    // The level ends a moment in, before any wave pays: the recording's wave is set back to the one the wait began in.
+    const midgame = fixture("1-9-versus-midgame");
+    const lost = fixtureAt("1-2-versus-lost", 9601 + 50);
+    const game = new StandInGame(midgame, { ...lost, versus: { ...lost.versus!, wave: midgame.versus!.wave } });
     expect((await call(await connect(game), "wait", { seconds: 30 })).text).toBe(
       "Your zombies got into the house: you won level 1-2! The level is over, so you can stop playing.",
     );

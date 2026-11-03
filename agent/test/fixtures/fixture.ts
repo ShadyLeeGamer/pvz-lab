@@ -56,6 +56,12 @@ export function fixture(name: FixtureName): GameState {
   return GameState.parse(load(name));
 }
 
+// The same state at another game time, for waits that go by the game's clock.
+export function fixtureAt(name: FixtureName, gameTicks: number): GameState {
+  const state = fixture(name);
+  return { ...state, board: { ...state.board!, gameTicks } };
+}
+
 // The game's answer to one of the requests capture.ts made, as it came over HTTP.
 export function savedReply(name: ReplyName): SavedReply {
   const saved = (load("replies") as Record<string, SavedReply | undefined>)[name];

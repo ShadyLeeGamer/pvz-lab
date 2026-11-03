@@ -59,7 +59,7 @@ How a match runs:
   - Every run starts from the save template, which has 6 seed slots and no shop upgrades. So later levels are harder than in a normal playthrough.
   - In the fog levels (world 4), the plants' view still shows zombies the fog would hide.
 - `seeds`: the seed packets to bring, by name, for levels that make you choose. If they're missing or wrong, `pnpm play` lists the choices. On a level that doesn't let you choose, it stops and says so.
-- `clock`: `"waits"` pauses the game while the player thinks, so time only passes when it calls `wait` (so a `"waits"` session must offer `wait`). `"realtime"` keeps the game running.
+- `clock`: `"waits"` pauses the game while the player thinks, so time only passes when it calls `wait` (so a `"waits"` session must offer `wait`). `"realtime"` keeps the game running, and `wait` waits until that much game time has passed by the game's own clock. If game time stands still (the game is frozen or paused), `wait` waits on, for up to 30 s, then says how much time passed.
 - `speed`: how fast game time runs whenever it runs, from 1 (normal, the default) to 50.
   - With `"waits"`, it only changes how quickly each wait plays out.
   - With `"realtime"`, it also changes how much thinking time the player gets.

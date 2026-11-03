@@ -4,7 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { GameState } from "../game-client.ts";
-import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, type ToolContext } from "../mcp/shared.ts";
+import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, type ToolContext, waitGameTime } from "../mcp/shared.ts";
 import type { ToolName } from "../session.ts";
 import { summarizeZombies } from "./summary.ts";
 
@@ -96,18 +96,14 @@ export function registerZombieTools(server: McpServer, tools: readonly ToolName[
           const before = await look();
           if (levelIsOver(before)) return reply(endOfLevel(before), true);
           const paidFor = before.versus?.wave ?? 0;
-          // The game runs at the session's speed, so this is `seconds` of game time.
-          const deadline = Date.now() + (input.seconds * 1000) / context.speed;
-          for (;;) {
-            await sleep(Math.max(0, Math.min(PAYDAY_POLL_MS, deadline - Date.now())));
-            const now = await look();
-            if (levelIsOver(now)) return reply(endOfLevel(now));
-            if (now.versus && now.versus.wave > paidFor) {
-              const huge = now.board?.progress.hugeWaveIncoming ? " It's a huge wave: zombies you send now are held, and walk on with its flag zombie." : "";
-              return reply(`Wave ${now.versus.wave} paid you ${points(now.versus.points)}.${huge}\n\n${show(now)}`);
-            }
-            if (Date.now() >= deadline) return reply(`${input.seconds} s passed.\n\n${show(now)}`);
+          const stop = (state: GameState) => levelIsOver(state) || (state.versus?.wave ?? 0) > paidFor;
+          const { state: now, line } = await waitGameTime(input.seconds, context.speed, before, look, stop, PAYDAY_POLL_MS);
+          if (levelIsOver(now)) return reply(endOfLevel(now));
+          if (now.versus && now.versus.wave > paidFor) {
+            const huge = now.board?.progress.hugeWaveIncoming ? " It's a huge wave: zombies you send now are held, and walk on with its flag zombie." : "";
+            return reply(`Wave ${now.versus.wave} paid you ${points(now.versus.points)}.${huge}\n\n${show(now)}`);
           }
+          return reply(`${line}\n\n${show(now)}`);
         }),
     );
   }
