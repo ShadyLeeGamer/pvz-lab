@@ -9,8 +9,8 @@ import { launchGame, readGameConfig, type RunningGame } from "../../src/game-pro
 import { GameApi, type Json } from "./api.ts";
 
 const serverScript = fileURLToPath(new URL("../../src/mcp/server.ts", import.meta.url));
-// The zombies of 1-2 at normal speed. The test steps the clock, so a wait lasts until the test steps
-// past whatever ends it.
+// The zombies of 1-2 at normal speed. The test steps the clock, and a wait counts the game time it
+// steps through: it lasts until a payday or the level's end, or its seconds of game time are up.
 const sessionFile = fileURLToPath(new URL("./zombie-session.json", import.meta.url));
 
 // Gives a tool call that's just been made time to read the game before the test moves the clock on.
@@ -28,6 +28,20 @@ describe("the zombie side's MCP tools on 1-2 in versus (launches the game; needs
   }
 
   const stepUntil = (done: (state: Json) => boolean) => api.stepUntil(done, { ticks: 50, speed: 50, maxSteps: 4000 });
+
+  // Waits, stepping the clock through each wait's 30 s of game time until `done` holds, and returns the
+  // first reply that didn't just run its time out. Between waits the clock stands still, so whatever
+  // ends a wait happens while one is going.
+  async function waitUntil(done: (state: Json) => boolean): Promise<{ text: string; isError: boolean }> {
+    for (;;) {
+      const waiting = call("wait", { seconds: 30 });
+      await settle();
+      const start = (await api.state()).board.gameTicks;
+      await stepUntil((state) => done(state) || state.board.gameTicks - start >= 3000);
+      const reply = await waiting;
+      if (!/^\d+(\.\d+)? s passed\./.test(reply.text)) return reply;
+    }
+  }
 
   beforeAll(async () => {
     game = await launchGame(readGameConfig());
@@ -69,10 +83,8 @@ describe("the zombie side's MCP tools on 1-2 in versus (launches the game; needs
   });
 
   it("wait ends early when the first wave pays", async () => {
-    const waiting = call("wait", { seconds: 30 });
-    await settle();
-    await stepUntil((state) => state.versus.wave >= 1);
-    expect((await waiting).text.split("\n")[0]).toBe("Wave 1 paid you 1 point.");
+    const { text } = await waitUntil((state) => state.versus.wave >= 1);
+    expect(text.split("\n")[0]).toBe("Wave 1 paid you 1 point.");
   });
 
   it("send_zombie sends a zombie into its row in the real game, and passes on the game's refusal", async () => {
@@ -96,10 +108,9 @@ describe("the zombie side's MCP tools on 1-2 in versus (launches the game; needs
   });
 
   it("wait ends when the level does, and says who won", async () => {
-    const waiting = call("wait", { seconds: 30 });
-    await settle();
-    await stepUntil((state) => !state.board || state.board.result !== "playing");
-    expect((await waiting).text).toMatch(
+    const { text, isError } = await waitUntil((state) => !state.board || state.board.result !== "playing");
+    expect(isError).toBe(false); // the wait that was going saw the end, rather than the next one finding it over
+    expect(text).toMatch(
       /^(Your zombies got into the house: you won level 1-2!|The plants held out and won level 1-2\.) The level is over, so you can stop playing\.$/,
     );
   });
