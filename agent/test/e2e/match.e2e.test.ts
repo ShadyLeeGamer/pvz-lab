@@ -1,6 +1,6 @@
 // Matches through the real game, with scripted players in Claude Code's place. Each one starts its side's
 // MCP server the way Claude Code does (a child process talking over stdin and stdout), as the host
-// configures it, and plays a short script.
+// configures it, or joins a URL seat over HTTP as any MCP app would, and plays a short script.
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,8 +8,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { matchFromFlags, matchFromSession, runMatch } from "../../src/match.ts";
+import { sleep } from "../../src/mcp/shared.ts";
 import type { LaunchPlayer, PlayerSpec } from "../../src/player.ts";
 import { loadSession, type Side } from "../../src/session.ts";
 
@@ -30,6 +32,15 @@ const over = (text: string) => /The level is over|No level is being played/.test
 // At speed 50 a level takes seconds.
 const SCRIPT_MS = 120_000;
 
+// Calls a tool through a connected client.
+function caller(client: Client): Call {
+  return async (name, args = {}) => {
+    const result = await client.callTool({ name, arguments: args });
+    const content = result.content as { type: string; text: string }[];
+    return { text: content[0]?.text ?? "", isError: result.isError === true };
+  };
+}
+
 // Plays each side with its script instead of Claude Code.
 function scripted(scripts: Partial<Record<Side, Script>>, joined: Partial<Record<Side, Joined>>): LaunchPlayer {
   return (spec: PlayerSpec) => {
@@ -44,11 +55,9 @@ function scripted(scripts: Partial<Record<Side, Script>>, joined: Partial<Record
       joined[spec.side] = { tools, instructions: client.getInstructions(), prompt: spec.prompt, brief: spec.brief };
       markReady(true);
       let toolCalls = 0;
-      const call: Call = async (name, args = {}) => {
+      const call: Call = (name, args) => {
         toolCalls++;
-        const result = await client.callTool({ name, arguments: args });
-        const content = result.content as { type: string; text: string }[];
-        return { text: content[0]?.text ?? "", isError: result.isError === true };
+        return caller(client)(name, args);
       };
       try {
         await scripts[spec.side]!(call, () => stopped);
@@ -72,6 +81,15 @@ async function plantsUntilOver(call: Call, stopped: () => boolean): Promise<void
     for (const move of [() => call("collect_sun"), () => call("place_plant", { plant: "peashooter", col: Math.floor(i / 5) % 4, row: i % 5 }), () => call("wait", { seconds: 10 })]) {
       if (over((await move()).text)) return;
     }
+  }
+}
+
+// The zombies: a plain zombie down the middle row at each payday, until the level is over.
+async function zombiesUntilOver(call: Call): Promise<void> {
+  const giveUpAt = Date.now() + SCRIPT_MS;
+  for (let { text } = await call("get_state"); !over(text) && Date.now() < giveUpAt; ) {
+    ({ text } = await call("wait", { seconds: 30 }));
+    if (text.includes("paid you")) await call("send_zombie", { zombie: "zombie", row: 2 });
   }
 }
 
@@ -143,6 +161,68 @@ describe("matches with scripted players (launch the game; need agent/.env)", () 
     expect(lines(join(runDir, "zombies", "moves.jsonl")).filter((move) => move.tool === "send_zombie" && !move.error).length).toBeGreaterThan(0);
     expect(JSON.parse(readFileSync(join(runDir, "plants", "session.json"), "utf8")).tools).toContain("choose_seeds");
     expect(printed.at(-1)).toMatch(/^Result: level 1-9: the (plants|zombies) won\. Plants: \d+ tool calls\. Zombies: \d+ tool calls, stopped before the end \(script ended\)\.$/);
+  }, 300_000);
+
+  it("plays 1-9 in versus with both seats taken by URL, starting game time once both players have moved since play began (D56)", async () => {
+    const printed: string[] = [];
+    const match = runMatch(matchFromFlags(["1-9", "--plants", "url", "--zombies", "url", "--speed", "50"]), { print: (line) => printed.push(line), runsDir });
+    // The link the host prints for a seat, once it has.
+    const link = async (side: Side): Promise<string> => {
+      const label = `The ${side}' seat: `;
+      for (;;) {
+        const line = printed.find((printedLine) => printedLine.startsWith(label));
+        if (line) return line.slice(label.length);
+        await sleep(100);
+      }
+    };
+    const takeSeat = async (side: Side, name: string) => {
+      const client = new Client({ name, version: "test" });
+      await client.connect(new StreamableHTTPClientTransport(new URL(await link(side))));
+      return { client, call: caller(client) };
+    };
+
+    // The zombies' player joins while the plants choose their seed packets: it's told the level hasn't
+    // started, and its wait ends when play begins.
+    const zombies = await takeSeat("zombies", "url-zombies");
+    expect(zombies.client.getInstructions()).toContain("You are playing the zombies in Plants vs. Zombies, Adventure level 1-9");
+    expect((await zombies.call("get_state")).text).toContain("The level hasn't started yet: the plants are choosing their seed packets.");
+    const waitingForPlay = zombies.call("wait", { seconds: 30 });
+
+    const plants = await takeSeat("plants", "url-plants");
+    const chosen = await plants.call("choose_seeds", { seeds: ["peashooter", "sunflower", "cherry_bomb", "wall_nut", "potato_mine", "snow_pea"] });
+    expect(chosen.isError, chosen.text).toBe(false);
+    const chosenAt = Date.now();
+    expect((await waitingForPlay).text.split("\n")[0]).toBe("Play has begun: the plants have chosen their seed packets.");
+    expect(Date.now() - chosenAt).toBeLessThan(10_000); // not after the 30 s a wait gives game time that stands still
+
+    // Game time waits for the zombies' player to move since play began: its look and its wait began before.
+    await sleep(1500);
+    expect((await plants.call("get_state")).text).toContain("Game time 0.0 s.");
+    expect(printed).not.toContain("Game time is running at 50x.");
+
+    await Promise.all([plantsUntilOver(plants.call, () => false), zombiesUntilOver(zombies.call)]);
+    // Both players have been told the level is over, so the host ends the match without waiting out its
+    // 60 s for players to stop.
+    const told = Date.now();
+    const { runDir, result } = await match;
+    expect(Date.now() - told).toBeLessThan(20_000);
+    await Promise.all([plants.client.close(), zombies.client.close()]).catch(() => {});
+
+    // Each seat's app was told, its moves shown with its side, and game time ran once both had moved.
+    expect(printed).toContain("[plants] url-plants test took the plants' seat.");
+    expect(printed).toContain("[zombies] url-zombies test took the zombies' seat.");
+    expect(printed).toContain("[zombies]   -> get_state {}");
+    expect(printed).toContain("Game time is running at 50x.");
+
+    // The level was decided, and the run folder holds each seat's moves and the command for Claude Code.
+    expect(["won", "lost"]).toContain(result.outcome);
+    expect(result.players.plants).toMatchObject({ app: "url-plants test", stoppedBeforeTheEnd: false });
+    expect(result.players.zombies).toMatchObject({ app: "url-zombies test", stoppedBeforeTheEnd: false });
+    expect(lines(join(runDir, "plants", "moves.jsonl"))[0].tool).toBe("choose_seeds");
+    expect(lines(join(runDir, "zombies", "moves.jsonl")).length).toBe(result.players.zombies!.toolCalls);
+    expect(JSON.parse(readFileSync(join(runDir, "zombies", "mcp.json"), "utf8")).mcpServers.pvz.url).toBe(await link("zombies"));
+    expect(readFileSync(join(runDir, "zombies", "claude.cmd"), "utf8")).toContain("--strict-mcp-config");
+    expect(printed.at(-1)).toMatch(/^Result: level 1-9: the (plants|zombies) won\. Plants \(url-plants test\): \d+ tool calls\. Zombies \(url-zombies test\): \d+ tool calls\.$/);
   }, 300_000);
 
   it("plays a play session as before: 1-8 with its own seeds against the level, until its player stops", async () => {

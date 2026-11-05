@@ -8,6 +8,11 @@ function oneLine(text: string): string {
   return flat.length > MAX_LINE ? `${flat.slice(0, MAX_LINE)}...` : flat;
 }
 
+// How a tool call and its answer are printed, for Claude players and for players at URL seats alike.
+export const callLine = (tool: string, input: unknown): string => `  -> ${tool} ${JSON.stringify(input)}`;
+// The first line of an answer says what happened; the rest is the game, which the window shows.
+export const answerLine = (text: string): string => `  <- ${oneLine(text.split("\n")[0] ?? "")}`;
+
 // A tool's answer arrives either as a string or as a list of content blocks.
 function resultText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -25,11 +30,8 @@ export function describeEvent(event: any, serverName: string): string[] {
   const lines: string[] = [];
   for (const part of event?.message?.content ?? []) {
     if (event.type === "assistant" && part.type === "text" && part.text.trim()) lines.push(`Claude: ${oneLine(part.text)}`);
-    if (event.type === "assistant" && part.type === "tool_use") {
-      lines.push(`  -> ${String(part.name).replace(`mcp__${serverName}__`, "")} ${JSON.stringify(part.input)}`);
-    }
-    // The first line of an answer says what happened; the rest is the game, which the window shows.
-    if (event.type === "user" && part.type === "tool_result") lines.push(`  <- ${oneLine(resultText(part.content).split("\n")[0] ?? "")}`);
+    if (event.type === "assistant" && part.type === "tool_use") lines.push(callLine(String(part.name).replace(`mcp__${serverName}__`, ""), part.input));
+    if (event.type === "user" && part.type === "tool_result") lines.push(answerLine(resultText(part.content)));
   }
   return lines;
 }

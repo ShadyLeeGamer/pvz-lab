@@ -75,4 +75,12 @@ describe("summarizeZombies", () => {
   it("says when the level isn't being played in versus", () => {
     expect(summarizeZombies(fixture("1-1-start"))).toContain("This level isn't being played in versus, so there's no zombie side to play.");
   });
+
+  it("says a versus level hasn't started while the plants choose their seed packets, rather than that it isn't versus", () => {
+    const text = summarizeZombies(fixture("1-9-versus-zombies-chooser"));
+    expect(text).toBe(
+      "Level 1-9 (day). Game time 0.0 s. Waves: 0 of 20 sent (0% through the level).\n" +
+        "The level hasn't started yet: the plants are choosing their seed packets. Play begins once they have.",
+    );
+  });
 });

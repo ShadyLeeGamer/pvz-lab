@@ -117,6 +117,24 @@ describe("zombie tools", () => {
     expect(text).toContain("Game time 98.0 s.");
   });
 
+  it("while the plants choose their seed packets, wait ends when play begins, and a send says the level hasn't started", async () => {
+    const game = new StandInGame(fixture("1-9-versus-zombies-chooser"), fixture("1-9-versus-zombies-chooser"), fixture("1-9-versus-start"));
+    const client = await connect(game);
+    const started = Date.now();
+    const { text } = await call(client, "wait", { seconds: 30 });
+    // Game time stands still at the seed chooser; without the end at play it would stand for 30 s.
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(text.split("\n")[0]).toBe("Play has begun: the plants have chosen their seed packets.");
+    expect(text).toContain("Your points: none yet. The first wave pays you when it arrives.");
+
+    const early = new StandInGame(fixture("1-9-versus-zombies-chooser"));
+    early.replies.sendZombie = reply("send-at-seed-chooser");
+    expect(await call(await connect(early), "send_zombie", { zombie: "zombie", row: 2 })).toEqual({
+      isError: true,
+      text: "Not sent: the level hasn't started yet, as the plants are choosing their seed packets.",
+    });
+  });
+
   it("wait ends when the level does, with the result told from the zombies' side", async () => {
     // The level ends a moment in, before any wave pays: the recording's wave is set back to the one the wait began in.
     const midgame = fixture("1-9-versus-midgame");

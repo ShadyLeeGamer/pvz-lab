@@ -3,8 +3,8 @@
 // to a few requests go into replies.json, so the tests never need to make one up.
 // Run with `pnpm fixtures:capture` (needs agent/.env, like the end-to-end tests). With --replies-only it
 // refreshes replies.json and leaves the saved states, and the tests written against them, alone. Naming
-// parts captures only those, e.g. `pnpm fixtures:capture versus`: the parts are "classic", "versus" and
-// "match".
+// parts captures only those, e.g. `pnpm fixtures:capture versus`: the parts are "classic", "versus",
+// "match" and "zombies-at-chooser".
 import { readFile, writeFile } from "node:fs/promises";
 import { launchGame, readGameConfig } from "../../src/game-process.ts";
 
@@ -213,10 +213,22 @@ async function match(): Promise<void> {
   await save("1-9-versus-plants", await playUntil((s) => s.versus.wave >= 1, false));
 }
 
+// A match's zombie seat, which can join before play begins: its view while the plants choose their seed
+// packets, and the game's answer to a send then.
+async function zombiesAtChooser(): Promise<void> {
+  const started = await send("/control", { type: "startLevel", level: "1-9", versus: true });
+  if (started.status !== 409) throw new Error(`expected 1-9 to wait at its seed chooser, got ${started.status} ${JSON.stringify(started.body)}`);
+  await save("1-9-versus-zombies-chooser", await zombiesView());
+  const early = await send("/actions", { type: "sendZombie", zombie: "zombie", row: 2 });
+  if (early.status !== 409) throw new Error(`expected a send at the seed chooser to be refused, got ${early.status} ${JSON.stringify(early.body)}`);
+  keep("send-at-seed-chooser", early);
+}
+
 try {
   if (wanted("classic")) await classic();
   if (wanted("versus")) await versus();
   if (wanted("match")) await match();
+  if (wanted("zombies-at-chooser")) await zombiesAtChooser();
   await save("replies", replies);
 } finally {
   await game.stop();

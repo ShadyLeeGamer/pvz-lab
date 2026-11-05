@@ -15,6 +15,9 @@ export interface ToolContext {
 
 export const MAX_WAIT_SECONDS = 30;
 
+// What every tool says, on either side, once the level is decided.
+export const LEVEL_OVER = "The level is over, so you can stop playing.";
+
 export const TICKS_PER_SECOND = 100;
 
 // A wait in real time gives up once game time has stood still this long, so a paused or stuck game can't

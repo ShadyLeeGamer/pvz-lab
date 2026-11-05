@@ -10,7 +10,8 @@ export type FixtureName =
   | "1-2-start"
   | "1-8-start"
   | "1-8-midgame"
-  // The zombie seat's view (view=zombies) of versus levels.
+  // The zombie seat's view (view=zombies) of versus levels, from while the plants choose their seeds on.
+  | "1-9-versus-zombies-chooser"
   | "1-9-versus-start"
   | "1-9-versus-midgame"
   | "1-9-versus-warning"
@@ -29,6 +30,7 @@ export type ReplyName =
   | "zombie-held"
   | "zombie-refused"
   | "not-versus"
+  | "send-at-seed-chooser"
   | "level-started"
   | "seeds-asked"
   | "crazy-dave"

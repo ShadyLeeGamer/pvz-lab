@@ -8,6 +8,8 @@ type VersusType = VersusState["types"][number];
 
 const points = (count: number) => `${count} point${count === 1 ? "" : "s"}`;
 
+export const NOT_STARTED = "The level hasn't started yet: the plants are choosing their seed packets. Play begins once they have.";
+
 // Why a held zombie couldn't walk on: only the game's own rules can stop it once it's held.
 const REFUND_REASONS: Record<string, string> = {
   row: "its row couldn't take it when the wave arrived",
@@ -61,7 +63,8 @@ export function summarizeZombies(state: GameState): string {
 
   const versus = state.versus;
   if (!versus) {
-    lines.push("This level isn't being played in versus, so there's no zombie side to play.");
+    // A match's zombie seat can join while the plants choose their seed packets; versus starts with play.
+    lines.push(state.scene === "level_intro" ? NOT_STARTED : "This level isn't being played in versus, so there's no zombie side to play.");
     return lines.join("\n");
   }
   lines.push(

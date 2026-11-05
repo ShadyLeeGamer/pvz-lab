@@ -4,14 +4,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { streetLine } from "../board-text.ts";
 import type { ApiError, GameState } from "../game-client.ts";
-import { levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, TICKS_PER_SECOND, type ToolContext, waitGameTime } from "../mcp/shared.ts";
+import { LEVEL_OVER, levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, TICKS_PER_SECOND, type ToolContext, waitGameTime } from "../mcp/shared.ts";
 import type { ToolName } from "../session.ts";
 import { summarizePlants } from "./summary.ts";
 
 const NO_GAME_YET = "No level is being played yet. Start one with start_level.";
 
 function endOfLevel(state: GameState, levelName = state.board?.levelName): string {
-  const stop = "The level is over, so you can stop playing.";
+  const stop = LEVEL_OVER;
   const level = levelName ? `level ${levelName}` : "the level";
   if (state.scene === "award" || state.board?.result === "won") return `You won ${level}! ${stop}`;
   if (state.board?.result === "lost") return `The zombies got into your house, so you lost ${level}. ${stop}`;

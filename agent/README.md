@@ -24,7 +24,7 @@ The game window opens without taking the keyboard, so you can keep working while
 
 ## Matches
 
-`pnpm match <level> --plants human|claude --zombies level|claude [--speed n]` plays one level with a player on each side:
+`pnpm match <level> --plants human|claude|url --zombies level|claude|url [--speed n]` plays one level with a player on each side:
 
 | Command | Who plays |
 |---|---|
@@ -32,21 +32,31 @@ The game window opens without taking the keyboard, so you can keep working while
 | `pnpm match 1-9 --plants claude --zombies level` | Claude Code, against the level |
 | `pnpm match 1-9 --plants claude --zombies claude` | Claude Code against Claude Code, in versus |
 | `pnpm match 1-9 --plants human --zombies claude` | you, against Claude Code on the zombies, in versus |
+| `pnpm match 1-9 --plants url --zombies url` | any two MCP apps on this PC, each joining by its seat's link, in versus |
 
 - A Claude player is Claude Code, locked down as in `pnpm play` (below), with only its own side's tools and view.
 - `--plants human` is you, in the game window, at normal speed.
-- `--zombies level` is the level's own waves. `--zombies claude` makes it a versus level (see `../docs/api.md`), which 1-1 can't be.
+- `url` is a seat any MCP app on this PC can take by its link (below), on either side.
+- `--zombies level` is the level's own waves. A player on the zombies makes it a versus level (see `../docs/api.md`), which 1-1 can't be.
 - `--speed` sets how fast game time runs, from 1 (normal, the default) to 50. A person always plays at normal speed.
+
+URL seats (`url`):
+- The host serves each URL seat's MCP tools over HTTP at `http://127.0.0.1:<port>/mcp/<side>/<token>`, and prints the link with ready-to-paste setup for Claude Code, Gemini CLI, VS Code, Cursor and Antigravity. The port and the tokens are new every match, so set the seat up again each time.
+- For Claude Code it writes `claude.cmd` in the seat's folder: run it in a new terminal, and it opens a chat that's locked down like the players the host launches, with only that seat's tools (no files, shell or web), no memory or CLAUDE.md files, none of your settings, and no API key. The first time, Claude Code asks you to trust its empty folder in `%TEMP%`. You can watch the chat as it plays.
+- Other apps keep their own tools, so they can read files (including the run folders) unless you set them up not to.
+- The seat's brief comes from the server, as the app's instructions. An app that connects again gets a new session for the same seat.
+- Only this PC can connect: the server listens on 127.0.0.1, refuses any `Host` but this PC's names and any web page's `Origin` but its own, and each seat has its own random token, so one side's link can't reach the other seat.
+- The host waits for each URL seat's player with no time limit, saying so every 30 s; Ctrl+C stops the match. Apps that connect from the cloud (claude.ai, Claude Desktop's and the mobile apps' URL connectors) can't reach this PC.
 
 How a match runs:
 - The host launches its own copy of the game and starts the level.
 - From 1-8 on, the level waits at its seed chooser. Claude on the plants picks with `choose_seeds`, and you pick in the window.
-- Claude on the zombies joins once play begins. Game time starts once every Claude player is ready, and runs from the start while you play.
+- Claude on the zombies joins once play begins. Game time starts once every Claude player is ready and every URL seat's player has made a move since play began, as a game lobby waits for everyone. A URL seat's player can join while the plants choose their seeds: it's told the level hasn't started, and its `wait` ends when play begins. While you play, it runs from the start, or once every URL seat's player has moved.
 - Each Claude player gets its brief as its system prompt: `prompts/plants-versus.md` (or `prompts/plants.md` against the level) or `prompts/zombies.md`.
-- The terminal shows what each Claude player says and does, marked `[plants]` or `[zombies]` when both are Claude, and each wave's pay to the zombie side. While you play, Claude's moves on the zombies only go to the run folder.
+- The terminal shows what each Claude player says and does, and each URL seat's moves, marked `[plants]` or `[zombies]` when both sides have a player, and each wave's pay to the zombie side. While you play, the zombie player's moves only go to the run folder.
 - The match ends when the game decides the level. A player that stops early, such as at its turn limit, is left as it is, and the level plays on without it. If nobody is left playing, the match ends there.
 - Ctrl+C stops it cleanly, as with `pnpm play`.
-- Each match is saved in `runs/<time>-match-<level>/` (not committed): `result.json`, with the winner and each player's tool calls and how it stopped, and for each Claude player a folder named after its side, with its session, brief, every tool call (`moves.jsonl`) and Claude Code's own output (`claude.jsonl`).
+- Each match is saved in `runs/<time>-match-<level>/` (not committed): `result.json`, with the winner and each player's tool calls and how it stopped, and for each player a folder named after its side, with its session, brief, MCP config and every tool call (`moves.jsonl`), plus Claude Code's own output (`claude.jsonl`) for a Claude player, or the command that opens Claude Code at a URL seat (`claude.cmd`).
 
 ## Play sessions
 
@@ -118,7 +128,7 @@ A level started with `"versus": true` (see `../docs/api.md`) hands its zombie si
   - the plants' sun and seed packets;
   - the lawn, each row's defence, and the zombies on it, including its own still walking in and any held for a huge wave.
 - `send_zombie` takes a zombie, a row and, for a bungee, the column it drops onto. The game refuses what its rules don't allow and says why.
-- `wait` ends early when a wave pays the zombie side or the level ends.
+- `wait` ends early when a wave pays the zombie side or the level ends, and when play begins if the zombie side joins while the plants choose their seeds.
 - The zombie side plays in real time, so the session's `clock` must be `realtime`. Someone else starts the level and runs the clock, and `PVZ_API_URL` points the server at that game.
 - The session's brief reaches the app as the server's instructions, and there's a `play_zombies` prompt. (A player that `pnpm match` starts has its brief as its system prompt instead, and the server doesn't send it again.)
 
@@ -141,7 +151,8 @@ A level started with `"versus": true` (see `../docs/api.md`) hands its zombie si
   - the MCP tools, through a real MCP client, against the game's own replies (also in `test/fixtures`; refresh both with `pnpm fixtures:capture`)
   - the zombie side's summary and tools, against the zombie side's real views of versus levels (`pnpm fixtures:capture versus` refreshes just those)
   - the plants' seed choosing and their view of a versus level (`pnpm fixtures:capture match`)
-  - how `pnpm match`'s flags and `pnpm play`'s session files become a match, and the session each Claude player gets
+  - how `pnpm match`'s flags and `pnpm play`'s session files become a match, and the session each player gets
+  - URL seats over real HTTP on this PC: each seat's own link, tools and brief, the requests it turns away (a wrong token, the other seat's token, a foreign `Host` or `Origin`), how moves are counted, an app connecting again, and the setup lines and Claude Code command the host prints
   - the session files, the client's handling of a busy game, and the lines `pnpm play` prints (against events from a real run)
 - End-to-end tests play real levels.
   - They start 1-1 from the title screen, plant, collect sun, and win it at high speed.
@@ -150,5 +161,5 @@ A level started with `"versus": true` (see `../docs/api.md`) hands its zombie si
   - Another drives the MCP server against the game, the way Claude Code does.
   - Another runs the server the way a chat app does: it starts its own game at `start_level`, asks for seeds with their costs, and closes the game when the app closes the server.
   - Others play versus levels: the zombie side's points and sends through the API, and the zombies of 1-2 through the MCP server.
-  - Others play matches with scripted players in Claude Code's place, each starting its side's MCP server as Claude Code would: Claude against Claude on 1-9 at speed 50, with the plants picking seeds through `choose_seeds` and the zombies' player stopping early, and a play session on 1-8 with its own seeds.
+  - Others play matches with scripted players in Claude Code's place, each starting its side's MCP server as Claude Code would: Claude against Claude on 1-9 at speed 50, with the plants picking seeds through `choose_seeds` and the zombies' player stopping early, and a play session on 1-8 with its own seeds. Another takes both seats of 1-9 by URL over HTTP, as any MCP app would, and checks that the zombies, joining first, are told the level hasn't started, and that game time waits for both players to move once play has begun.
   - A full run takes about two minutes. Set `PVZ_E2E_MUTE=1` in `.env` to run the games without sound.

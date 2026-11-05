@@ -83,7 +83,7 @@ How the game works here:
 - A huge wave pays you 7.5 seconds early, when its warning shows. Zombies you send during the warning are held, and walk on together with the wave's flag zombie, which the game still sends.
 - Once a wave's points are spent, your zombies count as that wave: if the plants beat them down, the next wave comes early, as it does with the game's own waves. Until then, the next wave waits for its timer.
 - The final wave is your last payday. Once it has arrived, the plants win as soon as no zombie is left on the lawn, so send its zombies during its warning or as soon as it arrives.
-- wait lets time pass, and ends early when a wave pays you or the level ends.
+- wait lets time pass, and ends early when a wave pays you or the level ends, and when play begins if you join while the plants are still choosing their seed packets.
 - The lawn is a grid. Columns run from 0, next to the plants' house on the left, to 8 on the right, where your zombies walk in. Rows count from 0 at the top.
 - Every tool tells you what happened and then shows the game.
 

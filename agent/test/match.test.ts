@@ -20,6 +20,10 @@ describe("matchFromFlags", () => {
     });
     expect(matchFromFlags(["--zombies", "level", "2-7", "--plants", "claude", "--speed", "50"])).toMatchObject({ level: "2-7", zombies: "level", speed: 50 });
     expect(matchFromFlags(["1-9", "--plants", "human", "--zombies", "claude"])).toMatchObject({ plants: "human", speed: 1 });
+    // A URL seat on either side, against anyone.
+    expect(matchFromFlags(["1-9", "--plants", "url", "--zombies", "url"])).toMatchObject({ plants: "url", zombies: "url" });
+    expect(matchFromFlags(["1-9", "--plants", "human", "--zombies", "url"])).toMatchObject({ plants: "human", zombies: "url" });
+    expect(matchFromFlags(["2-7", "--plants", "url", "--zombies", "level", "--speed", "3"])).toMatchObject({ plants: "url", zombies: "level", speed: 3 });
   });
 
   it("refuses what it can't play, and says why", () => {
@@ -27,8 +31,9 @@ describe("matchFromFlags", () => {
     expect(() => matchFromFlags(both)).toThrow(/name one level/);
     expect(() => matchFromFlags(["6-1", ...both])).toThrow(/name one level/);
     expect(() => matchFromFlags(["1-9", "1-8", ...both])).toThrow(/name one level/);
-    expect(() => matchFromFlags(["1-9", "--plants", "level", "--zombies", "claude"])).toThrow(/--plants must be human or claude/);
-    expect(() => matchFromFlags(["1-9", "--plants", "claude"])).toThrow(/--zombies must be level or claude/);
+    expect(() => matchFromFlags(["1-9", "--plants", "level", "--zombies", "claude"])).toThrow(/--plants must be human, claude or url/);
+    expect(() => matchFromFlags(["1-9", "--plants", "claude"])).toThrow(/--zombies must be level, claude or url/);
+    expect(() => matchFromFlags(["1-9", "--plants", "claude", "--zombies", "human"])).toThrow(/--zombies must be level, claude or url/);
     expect(() => matchFromFlags(["1-9", ...both, "--speed", "51"])).toThrow(/--speed must be a whole number from 1 to 50/);
     expect(() => matchFromFlags(["1-9", ...both, "--speed", "2.5"])).toThrow(/--speed must be/);
     expect(() => matchFromFlags(["1-9", ...both, "--seeds", "peashooter"])).toThrow(/usage: pnpm match/);
@@ -74,6 +79,8 @@ describe("seatSession", () => {
     expect(seatSession(versus, "plants", false).tools).not.toContain("choose_seeds");
     const againstLevel = seatSession(matchFromFlags(["1-9", "--plants", "claude", "--zombies", "level"]), "plants", false);
     expect(againstLevel.brief).toMatch(/[\\/]prompts[\\/]plants\.md$/);
+    // A URL seat on the zombies makes it versus too, and a URL seat on the plants gets the same session.
+    expect(seatSession(matchFromFlags(["1-9", "--plants", "url", "--zombies", "url"]), "plants", true)).toEqual({ ...plants, speed: 1 });
     for (const session of [plants, againstLevel]) expect(existsSync(session.brief)).toBe(true);
   });
 

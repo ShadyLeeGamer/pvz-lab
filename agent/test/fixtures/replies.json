@@ -299,5 +299,14 @@
         ]
       }
     }
+  },
+  "send-at-seed-chooser": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "not_versus",
+        "message": "this level isn't being played in versus"
+      }
+    }
   }
 }

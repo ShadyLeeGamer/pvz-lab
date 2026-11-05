@@ -16,15 +16,12 @@
 //                        and pnpm play give it, so the server doesn't send it again (optional)
 import { appendFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
 import { writeBrief } from "../brief.ts";
 import { GameClient } from "../game-client.ts";
-import { registerPlantTools } from "../plants/tools.ts";
 import { loadSession } from "../session.ts";
-import { registerZombieTools } from "../zombies/tools.ts";
 import { OwnGame } from "./own-game.ts";
+import { createSeatServer } from "./seat-server.ts";
 
 const { PVZ_SESSION, PVZ_API_URL, PVZ_LOG, PVZ_NO_INSTRUCTIONS } = process.env;
 if (!PVZ_SESSION) {
@@ -49,39 +46,13 @@ const brief = writeBrief(await readFile(session.briefPath, "utf8"), session.sett
 // Chat sessions and the zombie side send the brief here, for apps whose system prompt nobody sets. A
 // player that pnpm match or pnpm play starts has it as its system prompt already (D47).
 const sendsBrief = (chat || side === "zombies") && PVZ_NO_INSTRUCTIONS !== "1";
-const server = new McpServer({ name: "pvz", version: "0.1.0" }, sendsBrief ? { instructions: brief } : undefined);
-
-const context = {
+const server = createSeatServer(session.settings, brief, {
   game,
   starter: ownGame,
   clock,
   speed,
   log: PVZ_LOG ? (entry: Record<string, unknown>) => appendFileSync(PVZ_LOG, `${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`) : undefined,
-};
-if (side === "zombies") registerZombieTools(server, tools, context);
-else registerPlantTools(server, tools, context);
-
-if (side === "zombies") {
-  server.registerPrompt(
-    "play_zombies",
-    { title: "Play the zombies", description: "Plays the zombie side of the versus level being played, to the end." },
-    () => ({ messages: [{ role: "user", content: { type: "text", text: `${brief}\nPlay the zombies until the level is over.` } }] }),
-  );
-}
-
-if (chat) {
-  server.registerPrompt(
-    "play_level",
-    {
-      title: "Play a level",
-      description: "Starts a Plants vs. Zombies Adventure level and plays it to the end.",
-      argsSchema: { level: z.string().describe("The level, from 1-1 to 5-10, e.g. 2-7.") },
-    },
-    ({ level }) => ({
-      messages: [{ role: "user", content: { type: "text", text: `${brief}\nStart level ${level} with start_level and play it to the end on your own.` } }],
-    }),
-  );
-}
+}, sendsBrief);
 
 // An app shuts the server down by closing its stdin (or ending it); the game goes with it.
 const shutDown = async (): Promise<void> => {
