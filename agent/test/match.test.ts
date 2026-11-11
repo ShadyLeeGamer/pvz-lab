@@ -109,22 +109,23 @@ describe("matchFromSession", () => {
 describe("seatSession", () => {
   const versus = matchFromFlags(["1-9", "--plants", "claude", "--zombies", "claude", "--speed", "5"]);
 
-  it("gives a match's plants their tools, choose_seeds while the level waits at its seed chooser, and the brief for playing against a player", () => {
+  it("gives a match's plants their tools, choose_seeds while the level waits at its seed chooser, ready against a player (D62), and the brief for playing against one", () => {
     const plants = seatSession(versus, "plants", true);
     expect(plants).toMatchObject({ side: "plants", level: "1-9", clock: "realtime", speed: 5 });
-    expect(plants.tools).toEqual(["choose_seeds", "get_state", "place_plant", "dig_up", "collect_sun", "wait"]);
+    expect(plants.tools).toEqual(["choose_seeds", "ready", "get_state", "place_plant", "dig_up", "collect_sun", "wait"]);
     expect(plants.brief).toMatch(/[\\/]prompts[\\/]plants-versus\.md$/);
     expect(seatSession(versus, "plants", false).tools).not.toContain("choose_seeds");
     const againstLevel = seatSession(matchFromFlags(["1-9", "--plants", "claude", "--zombies", "level"]), "plants", false);
+    expect(againstLevel.tools).toEqual(["get_state", "place_plant", "dig_up", "collect_sun", "wait"]);
     expect(againstLevel.brief).toMatch(/[\\/]prompts[\\/]plants\.md$/);
     // A URL seat on the zombies makes it versus too, and a URL seat on the plants gets the same session.
     expect(seatSession(matchFromFlags(["1-9", "--plants", "url", "--zombies", "url"]), "plants", true)).toEqual({ ...plants, speed: 1 });
     for (const session of [plants, againstLevel]) expect(existsSync(session.brief)).toBe(true);
   });
 
-  it("gives the zombies their three tools in real time, with the zombies' brief", () => {
+  it("gives the zombies their tools, ready among them (D62), in real time, with the zombies' brief", () => {
     const zombies = seatSession(versus, "zombies", false);
-    expect(zombies).toMatchObject({ side: "zombies", level: "1-9", clock: "realtime", speed: 5, tools: ["get_state", "send_zombie", "wait"] });
+    expect(zombies).toMatchObject({ side: "zombies", level: "1-9", clock: "realtime", speed: 5, tools: ["ready", "get_state", "send_zombie", "wait"] });
     expect(zombies.brief).toMatch(/[\\/]prompts[\\/]zombies\.md$/);
     expect(existsSync(zombies.brief)).toBe(true);
   });

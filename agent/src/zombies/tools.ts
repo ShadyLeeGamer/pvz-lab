@@ -1,10 +1,24 @@
-// The tools the zombie side plays with in a versus level: look, send a zombie, let time pass. The game
-// carries out every send and decides what's allowed; like the plants' tools, these functions only translate
-// and describe. The zombie side always plays in real time, so wait never touches the game's clock.
+// The tools the zombie side plays with in a versus level: look, send a zombie, let time pass, and in a
+// match, say it's ready. The game carries out every send and decides what's allowed; like the plants'
+// tools, these functions only translate and describe. The zombie side always plays in real time, so wait
+// never touches the game's clock.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { GameState } from "../game-client.ts";
-import { LEVEL_OVER, levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, type ToolContext, waitGameTime } from "../mcp/shared.ts";
+import {
+  awaitStart,
+  LEVEL_OVER,
+  levelIsOver,
+  logged,
+  MAX_WAIT_SECONDS,
+  NO_READY_CHECK,
+  normalizeName,
+  notStartedYet,
+  reply,
+  type ToolContext,
+  waitBeforeStart,
+  waitGameTime,
+} from "../mcp/shared.ts";
 import type { ToolName } from "../session.ts";
 import { summarizeZombies } from "./summary.ts";
 
@@ -32,6 +46,26 @@ export function registerZombieTools(server: McpServer, tools: readonly ToolName[
   const look = (): Promise<GameState> => game.state("zombies");
   const show = (state: GameState): string => (levelIsOver(state) ? endOfLevel(state) : summarizeZombies(state));
 
+  // A match with a player on each side starts once every player has said it's ready (D62).
+  if (enabled.has("ready")) {
+    server.registerTool(
+      "ready",
+      {
+        title: "Say you're ready",
+        description:
+          "Tells the match you're set to play, then waits up to 30 s for it to start, and shows the game. The match starts when every " +
+          "player is ready, and your sends are refused until then.",
+      },
+      () =>
+        logged(context, "ready", {}, async () => {
+          const { lobby } = context;
+          if (!lobby) return reply(NO_READY_CHECK);
+          lobby.markReady("zombies");
+          return reply(`${await awaitStart(lobby)}\n\n${show(await look())}`);
+        }),
+    );
+  }
+
   if (enabled.has("get_state")) {
     server.registerTool(
       "get_state",
@@ -40,7 +74,11 @@ export function registerZombieTools(server: McpServer, tools: readonly ToolName[
         description: "Shows your points and the zombies you can send, the plants' sun and seed packets, the lawn, each row's defence and the zombies on it.",
         annotations: { readOnlyHint: true },
       },
-      () => logged(context, "get_state", {}, async () => reply(show(await look()))),
+      () =>
+        logged(context, "get_state", {}, async () => {
+          const early = notStartedYet(context, "zombies");
+          return reply(`${early ? `${early}\n\n` : ""}${show(await look())}`);
+        }),
     );
   }
 
@@ -67,6 +105,8 @@ export function registerZombieTools(server: McpServer, tools: readonly ToolName[
       },
       (input) =>
         logged(context, "send_zombie", input, async () => {
+          const early = notStartedYet(context, "zombies");
+          if (early) return reply(early, true);
           const before = await look();
           if (levelIsOver(before)) return reply(endOfLevel(before), true);
           const zombie = normalizeName(input.zombie);
@@ -102,6 +142,9 @@ export function registerZombieTools(server: McpServer, tools: readonly ToolName[
       },
       (input) =>
         logged(context, "wait", input, async () => {
+          // Before the match starts, a player that's ready waits for the start instead (D62).
+          const early = await waitBeforeStart(context, "zombies");
+          if (early) return reply(early.refused ? early.line : `${early.line}\n\n${show(await look())}`, early.refused);
           const before = await look();
           if (levelIsOver(before)) return reply(endOfLevel(before), true);
           const paidFor = before.versus?.wave ?? 0;

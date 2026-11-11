@@ -51,6 +51,25 @@ Play the level to the end on your own. When a tool says the level is over, stop.
     expect(writeBrief(template, session({}))).not.toContain("choose_seeds");
   });
 
+  it("tells each side of a match with a player on each side that it starts once every player has called ready (D62)", () => {
+    const zombies = readFileSync(new URL("../prompts/zombies.md", import.meta.url), "utf8");
+    const versus = readFileSync(new URL("../prompts/plants-versus.md", import.meta.url), "utf8");
+    const zombieBrief = writeBrief(zombies, session({ side: "zombies", level: "1-9", clock: "realtime", tools: ["ready", "get_state", "send_zombie", "wait"] }));
+    expect(zombieBrief).toContain(
+      "How the game works here:\n" +
+        "- The match starts once every player is ready: look at the game, then call ready, which waits up to 30 s for the start. " +
+        "If it hasn't started by then, wait waits on. Your sends are refused until it starts.\n",
+    );
+    const plantBrief = writeBrief(versus, session({ level: "1-9", clock: "realtime", tools: ["choose_seeds", "ready", "get_state", "place_plant", "wait"] }));
+    expect(plantBrief).toContain(
+      "then picks them.\n" +
+        "- The match starts once every player is ready: look at the game, choose your seed packets, then call ready, which waits up to 30 s for the start. " +
+        "If it hasn't started by then, wait waits on. Your moves are refused until it starts.\n",
+    );
+    // Alone against the level there's no ready check, so it's never mentioned.
+    expect(writeBrief(template, session({ clock: "realtime", tools: ["get_state", "place_plant", "wait"] }))).not.toMatch(/\bready\b/);
+  });
+
   it("tells a player with dig_up what digging up a plant does", () => {
     const text = writeBrief(template, session({ level: "1-7", tools: ["get_state", "place_plant", "dig_up", "collect_sun", "wait"] }));
     expect(text).toContain(
@@ -77,7 +96,7 @@ Your goal is to get a zombie into the plants' house: past their plants, and past
 How the game works here:
 - The game keeps running while you think: your zombies keep walking and the plants keep fighting, so the time between your moves is game time too.
 - Each wave pays you points when it arrives: what the game's own zombies in that wave would have cost. Spend them on that wave. Points still unspent when the next wave pays are lost.
-- You can send the level's own zombie types, each for its cost. A type can't come before its first wave, except in the final wave, which allows every type. get_state shows what each costs and which are ready to send.
+- You can send the level's own zombie types, each for its cost. A type can't come before its first wave, except in the final wave, which allows every type. get_state shows what each costs and which you can send now.
 - Your zombies walk in from the right, in the row you choose. The game refuses a row a zombie can't use, such as dirt, or water before wave 6 for a zombie that only walks.
 - In a level with bungee zombies, a bungee_zombie drops onto the tile you name and carries off the plant there.
 - A huge wave pays you 7.5 seconds early, when its warning shows. Zombies you send during the warning are held, and walk on together with the wave's flag zombie, which the game still sends.

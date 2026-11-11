@@ -3,12 +3,20 @@
 // player is only told about what it can actually do.
 import type { Session, ToolName } from "./session.ts";
 
+// In a match with a player on each side, how it starts (D62): once every player has called ready.
+function readyRule(has: (tool: ToolName) => boolean, before: string, moves: string): string[] {
+  if (!has("ready")) return [];
+  const waitOn = has("wait") ? " If it hasn't started by then, wait waits on." : "";
+  return [`The match starts once every player is ready: ${before}, then call ready, which waits up to 30 s for the start.${waitOn} Your ${moves} are refused until it starts.`];
+}
+
 // The zombie side always plays in real time (session.ts), against plants that play on while it thinks.
 function zombieRules({ speed, tools }: Session): string[] {
   const has = (tool: ToolName) => tools.includes(tool);
   const fast = speed > 1 ? ` It runs at ${speed} times normal speed.` : "";
-  const costs = has("get_state") ? " get_state shows what each costs and which are ready to send." : "";
+  const costs = has("get_state") ? " get_state shows what each costs and which you can send now." : "";
   return [
+    ...readyRule(has, "look at the game", "sends"),
     `The game keeps running while you think: your zombies keep walking and the plants keep fighting, so the time between your moves is game time too.${fast}`,
     "Each wave pays you points when it arrives: what the game's own zombies in that wave would have cost. Spend them on that wave. Points still unspent when the next wave pays are lost.",
     `You can send the level's own zombie types, each for its cost. A type can't come before its first wave, except in the final wave, which allows every type.${costs}`,
@@ -34,6 +42,7 @@ function plantRules({ clock, speed, tools }: Session): string[] {
   if (has("choose_seeds")) {
     rules.push("The level waits at its seed chooser until you choose which seed packets to bring: choose_seeds shows the choices and what each costs, then picks them.");
   }
+  rules.push(...readyRule(has, has("choose_seeds") ? "look at the game, choose your seed packets" : "look at the game", "moves"));
   if (clock === "waits") {
     rules.push("The game is paused while you think. Game time only passes when you call wait, and you choose how long each wait is.");
   } else {

@@ -73,7 +73,7 @@ describe("loadSession", () => {
   it("gives each side only its own tools, and the zombie side a real-time game with no seeds", async () => {
     const zombies = { side: "zombies", level: "1-9", clock: "realtime", tools: ["get_state", "send_zombie", "wait"], brief: "b.md" };
     expect((await loadSession(await write(zombies))).settings).toMatchObject({ side: "zombies", clock: "realtime", tools: ["get_state", "send_zombie", "wait"] });
-    await expect(loadSession(await write({ ...zombies, tools: ["get_state", "place_plant"] }))).rejects.toThrow(/the zombies' side takes get_state, send_zombie and wait/);
+    await expect(loadSession(await write({ ...zombies, tools: ["get_state", "place_plant"] }))).rejects.toThrow(/the zombies' side takes ready, get_state, send_zombie and wait/);
     await expect(loadSession(await write({ level: "1-9", clock: "realtime", tools: ["send_zombie"], brief: "b.md" }))).rejects.toThrow(/the plants' side takes/);
     await expect(loadSession(await write({ ...zombies, clock: "waits" }))).rejects.toThrow(/the zombies' side plays in real time/);
     await expect(loadSession(await write({ ...zombies, seeds: ["peashooter"] }))).rejects.toThrow(/brings no seeds/);

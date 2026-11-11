@@ -92,11 +92,23 @@ describe("URL seats", () => {
     expect(token(next.get("zombies")!.url)).not.toBe(token(zombies.url));
 
     const atZombies = (await join(zombies.url)).client;
-    expect((await atZombies.listTools()).tools.map((tool) => tool.name).sort()).toEqual(["get_state", "send_zombie", "wait"]);
+    expect((await atZombies.listTools()).tools.map((tool) => tool.name).sort()).toEqual(["get_state", "ready", "send_zombie", "wait"]);
     expect(atZombies.getInstructions()).toBe("the zombies' brief");
     const atPlants = (await join(plants.url)).client;
-    expect((await atPlants.listTools()).tools.map((tool) => tool.name).sort()).toEqual(["collect_sun", "dig_up", "get_state", "place_plant", "wait"]);
+    expect((await atPlants.listTools()).tools.map((tool) => tool.name).sort()).toEqual(["collect_sun", "dig_up", "get_state", "place_plant", "ready", "wait"]);
     expect(atPlants.getInstructions()).toBe("the plants' brief");
+  });
+
+  it("sends no brief to a player that has it as its system prompt already, as a Claude player the host starts does (D47, D62)", async () => {
+    const spec: SeatSpec = {
+      settings: seatSession(match, "plants", false),
+      brief: "the plants' brief",
+      context: { game: new StandInGame(fixture("1-9-versus-plants")), clock: "realtime", speed: 1 },
+      sendsBrief: false,
+    };
+    const seats = await openUrlSeats(new Map([["plants", spec]]));
+    opened.push(seats);
+    expect((await join(seats.seats.get("plants")!.url)).client.getInstructions()).toBeUndefined();
   });
 
   it("turns away a wrong token, the other seat's token, a Host other than this PC's and a web page's Origin", async () => {
@@ -144,7 +156,7 @@ describe("URL seats", () => {
     // A request in the old session is answered 404, which tells its app to start again.
     const list = { jsonrpc: "2.0", id: 2, method: "tools/list" };
     expect(await post(seat.url, list, { "mcp-session-id": old, "mcp-protocol-version": "2025-06-18" })).toBe(404);
-    expect((await second.client.listTools()).tools.length).toBe(5);
+    expect((await second.client.listTools()).tools.length).toBe(6);
   });
 });
 
@@ -169,16 +181,17 @@ describe("joining a URL seat", () => {
       context: { game: new StandInGame(fixture("1-9-versus-midgame")), clock: "realtime", speed: 1, log: () => {} },
     };
     const tools = await seatTools(spec);
-    expect(tools.map((tool) => tool.name)).toEqual(["get_state", "send_zombie", "wait"]);
+    expect(tools.map((tool) => tool.name)).toEqual(["ready", "get_state", "send_zombie", "wait"]);
     const agents = agentsFile("The zombies' brief.\n", tools);
-    expect(agents.startsWith("The zombies' brief.\n\n## Your tools\n\n### get_state\n")).toBe(true);
+    expect(agents.startsWith("The zombies' brief.\n\n## Your tools\n\n### ready\n")).toBe(true);
+    expect(agents).toContain("### ready\n\nTells the match you're set to play");
     expect(agents).toContain("### get_state\n\nShows your points");
     expect(agents).toContain("### send_zombie\n\nSends one of the level's zombies");
     expect(agents).toContain("- `zombie` (text, required): The zombie's name as get_state lists it, e.g. conehead_zombie.\n");
     expect(agents).toContain("- `row` (whole number from 0 to 5, required): Row, counting from 0 at the top.\n");
     expect(agents).toContain("- `col` (whole number from 0 to 8, optional): Only for bungee_zombie");
     expect(agents).toContain("- `seconds` (number from 0.1 to 30, required): Seconds of game time, from 0.1 to 30.\n");
-    expect(agents.split("It takes no arguments.").length - 1).toBe(1); // get_state's
+    expect(agents.split("It takes no arguments.").length - 1).toBe(2); // ready's and get_state's
     expect(agents.endsWith("from 0.1 to 30.\n")).toBe(true);
   });
 

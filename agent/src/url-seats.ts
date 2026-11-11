@@ -1,9 +1,10 @@
 // URL seats: pnpm match serves a side's MCP server over HTTP on this PC, so any MCP app can take that
-// seat by its link, http://127.0.0.1:<port>/mcp/<side>/<token>. Each seat has its own random token, made
-// for this match only (D57), so a player can't reach the other side's seat by changing the side in its
-// link. Only this PC can connect: the server listens on 127.0.0.1, the SDK's Express app turns away any
-// Host but this PC's own names, and a request from a web page is refused unless the page is this server's
-// own (Origin, D30).
+// seat by its link, http://127.0.0.1:<port>/mcp/<side>/<token>. A Claude player the host starts in the
+// terminal plays at a seat too, so the host sees every player's moves (D62). Each seat has its own random
+// token, made for this match only (D57), so a player can't reach the other side's seat by changing the
+// side in its link. Only this PC can connect: the server listens on 127.0.0.1, the SDK's Express app turns
+// away any Host but this PC's own names, and a request from a web page is refused unless the page is this
+// server's own (Origin, D30).
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -26,6 +27,9 @@ export interface SeatSpec {
   settings: Session;
   brief: string;
   context: ToolContext;
+  // False for a player that has the brief as its system prompt already, as a Claude player the host
+  // starts does (D47); otherwise the seat sends it as the server's instructions.
+  sendsBrief?: boolean;
 }
 
 export interface UrlSeat {
@@ -79,7 +83,7 @@ export async function openUrlSeats(specs: Map<Side, SeatSpec>, onJoin?: (side: S
     if (req.method === "POST" && isInitializeRequest(req.body)) {
       // Each initialize starts a new session for the seat, and ends the one it had (R39).
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
-      const server = createSeatServer(seat.spec.settings, seat.spec.brief, seat.spec.context, true);
+      const server = createSeatServer(seat.spec.settings, seat.spec.brief, seat.spec.context, seat.spec.sendsBrief ?? true);
       await server.connect(transport);
       const old = seat.current;
       seat.current = { server, transport };

@@ -1,8 +1,9 @@
 // The command line a Claude player starts with: locked down to its MCP server's tools, with the model
-// picked for its side if any. The end-to-end tests play with scripted players in its place.
+// picked for its side if any, and the MCP config that points it at its seat. The end-to-end tests play
+// with scripted players in its place.
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { claudeArgs, playerEnvironment, type PlayerSpec } from "../src/player.ts";
+import { claudeArgs, playerEnvironment, playerMcpConfig, type PlayerSpec } from "../src/player.ts";
 import { loadSession } from "../src/session.ts";
 
 const session = await loadSession(fileURLToPath(new URL("../sessions/1-8-single-actions.json", import.meta.url)));
@@ -11,9 +12,15 @@ const spec: PlayerSpec = {
   session,
   brief: "The brief.",
   prompt: "Play the level.",
-  server: { command: "node", args: ["server.ts"], env: {} },
+  url: "http://127.0.0.1:5000/mcp/plants/token",
   dir: "C:\\runs\\match\\plants",
 };
+
+describe("playerMcpConfig", () => {
+  it("gives a player its seat on the host's MCP server, over HTTP, and nothing else (D62)", () => {
+    expect(JSON.parse(playerMcpConfig(spec.url))).toEqual({ mcpServers: { pvz: { type: "http", url: "http://127.0.0.1:5000/mcp/plants/token" } } });
+  });
+});
 
 describe("claudeArgs", () => {
   it("starts Claude Code with only its MCP server's tools, never asking, with its brief and turn limit", () => {

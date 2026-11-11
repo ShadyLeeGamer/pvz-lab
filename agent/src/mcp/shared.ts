@@ -2,7 +2,7 @@
 // names and the end of a level.
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Game, GameState } from "../game-client.ts";
-import type { ToolName } from "../session.ts";
+import type { Side, ToolName } from "../session.ts";
 import type { GameStarter } from "./own-game.ts";
 
 export interface ToolContext {
@@ -11,7 +11,90 @@ export interface ToolContext {
   clock: "waits" | "realtime";
   speed: number; // how fast game time runs whenever it runs; 1 is normal speed
   log?: (entry: Record<string, unknown>) => void;
+  lobby?: Lobby; // in a match with a player on each side, the ready check it starts on (D62)
 }
+
+// A match with a player on each side starts on a ready check, as a game lobby does (D62): each player
+// calls ready, and the host starts the match once every one has. Until then, their moves are refused.
+export class Lobby {
+  started = false;
+  // The sides whose players must be ready: every player but a person, who plays in the game window.
+  readonly players: readonly Side[];
+  private readonly readySides = new Set<Side>();
+  private readonly gone = new Set<Side>();
+  private readonly starting: (() => void)[] = [];
+
+  constructor(players: readonly Side[]) {
+    this.players = players;
+  }
+
+  isReady(side: Side): boolean {
+    return this.readySides.has(side);
+  }
+
+  markReady(side: Side): void {
+    this.readySides.add(side);
+  }
+
+  // A player that stops before it's ready doesn't hold the start.
+  leave(side: Side): void {
+    this.gone.add(side);
+  }
+
+  waitingFor(): Side[] {
+    return this.players.filter((side) => !this.readySides.has(side) && !this.gone.has(side));
+  }
+
+  start(): void {
+    this.started = true;
+    for (const wake of this.starting.splice(0)) wake();
+  }
+
+  // True once the match has started, or false after ms.
+  whenStarted(ms: number): Promise<boolean> {
+    if (this.started) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), ms);
+      this.starting.push(() => {
+        clearTimeout(timer);
+        resolve(true);
+      });
+    });
+  }
+}
+
+export const NOT_READY = "The match hasn't started yet: call ready once you're set. It starts when every player is ready.";
+
+function waitingLine(lobby: Lobby): string {
+  const waiting = lobby.waitingFor().map((side) => `the ${side}' player`);
+  return waiting.length > 0 ? `it's waiting for ${waiting.join(" and ")}.` : "it's about to start.";
+}
+
+// Why a side can't move yet, or undefined once the match has started (or when there's no ready check).
+export function notStartedYet(context: ToolContext, side: Side): string | undefined {
+  const { lobby } = context;
+  if (!lobby || lobby.started) return undefined;
+  if (!lobby.isReady(side)) return NOT_READY;
+  return `The match hasn't started yet: ${waitingLine(lobby)} Call wait to wait for the start.`;
+}
+
+// Waits for the match to start, up to STILL_LIMIT_MS as a wait would, and says whether it has.
+export async function awaitStart(lobby: Lobby): Promise<string> {
+  if (await lobby.whenStarted(STILL_LIMIT_MS)) return "Everyone's ready: the match has started.";
+  return `You're ready. The match hasn't started yet: ${waitingLine(lobby)} Call wait to wait on.`;
+}
+
+// What wait does before the match starts: a player that's ready waits for the start, and one that
+// isn't is told to call ready. Undefined once the match has started (or when there's no ready check).
+export async function waitBeforeStart(context: ToolContext, side: Side): Promise<{ line: string; refused: boolean } | undefined> {
+  const { lobby } = context;
+  if (!lobby || lobby.started) return undefined;
+  if (!lobby.isReady(side)) return { line: NOT_READY, refused: true };
+  return { line: await awaitStart(lobby), refused: false };
+}
+
+// What ready says in a game without a ready check.
+export const NO_READY_CHECK = "This game has no ready check: just play.";
 
 export const MAX_WAIT_SECONDS = 30;
 

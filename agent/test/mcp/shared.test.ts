@@ -1,6 +1,6 @@
 // What both sides' tools share.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normalizeName, STILL_LIMIT_MS, waitGameTime } from "../../src/mcp/shared.ts";
+import { awaitStart, Lobby, normalizeName, STILL_LIMIT_MS, waitGameTime } from "../../src/mcp/shared.ts";
 import { fixture, fixtureAt } from "../fixtures/fixture.ts";
 
 describe("normalizeName", () => {
@@ -8,6 +8,39 @@ describe("normalizeName", () => {
     expect(normalizeName("Wall-nut")).toBe("wall_nut");
     expect(normalizeName("  cherry bomb ")).toBe("cherry_bomb");
     expect(normalizeName("snow_pea")).toBe("snow_pea");
+  });
+});
+
+describe("Lobby, a match's ready check (D62)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("waits for every player that isn't ready and hasn't left, and wakes whoever waits once the match starts", async () => {
+    const lobby = new Lobby(["plants", "zombies"]);
+    expect(lobby.waitingFor()).toEqual(["plants", "zombies"]);
+    lobby.markReady("zombies");
+    expect(lobby.waitingFor()).toEqual(["plants"]);
+    lobby.leave("plants");
+    expect(lobby.waitingFor()).toEqual([]);
+    const waiting = lobby.whenStarted(60_000);
+    lobby.start();
+    expect(await waiting).toBe(true);
+    expect(await lobby.whenStarted(0)).toBe(true);
+  });
+
+  it("awaitStart waits up to STILL_LIMIT_MS for the start, then says whom the match is waiting for", async () => {
+    vi.useFakeTimers();
+    const lobby = new Lobby(["plants", "zombies"]);
+    lobby.markReady("plants");
+    let line: string | undefined;
+    void awaitStart(lobby).then((said) => (line = said));
+    await vi.advanceTimersByTimeAsync(STILL_LIMIT_MS - 1);
+    expect(line).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(line).toBe("You're ready. The match hasn't started yet: it's waiting for the zombies' player. Call wait to wait on.");
+    lobby.start();
+    expect(await awaitStart(lobby)).toBe("Everyone's ready: the match has started.");
   });
 });
 

@@ -1,7 +1,7 @@
-// The MCP server the player uses. MCP messages travel over stdin and stdout, so anything meant for
-// people goes to stderr. It runs in three ways:
-// - from pnpm match and pnpm play, which start the game and the level themselves and give the server
-//   the game's address;
+// The MCP server an app starts for itself. MCP messages travel over stdin and stdout, so anything meant
+// for people goes to stderr. (pnpm match and pnpm play serve their players' tools on their own server
+// instead, at seats: url-seats.ts.) It runs in three ways:
+// - for a level that's already started, given the game's address;
 // - from a chat app such as Claude Desktop, with a session that offers start_level: the server starts
 //   its own copy of the game at the first start_level, closes it when the app closes the server, and
 //   gives the app the session's instructions and a play_level prompt;
@@ -10,10 +10,8 @@
 //
 // Environment:
 //   PVZ_SESSION          the session file: side, tools, clock, speed and brief (required)
-//   PVZ_API_URL          the address of a game that's already running, as pnpm match and pnpm play set it
+//   PVZ_API_URL          the address of a game that's already running
 //   PVZ_LOG              a file to append every tool call to, one JSON line each (optional)
-//   PVZ_NO_INSTRUCTIONS  1 when the player already has the brief as its system prompt, as pnpm match
-//                        and pnpm play give it, so the server doesn't send it again (optional)
 import { appendFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -23,7 +21,7 @@ import { loadSession } from "../session.ts";
 import { OwnGame } from "./own-game.ts";
 import { createSeatServer } from "./seat-server.ts";
 
-const { PVZ_SESSION, PVZ_API_URL, PVZ_LOG, PVZ_NO_INSTRUCTIONS } = process.env;
+const { PVZ_SESSION, PVZ_API_URL, PVZ_LOG } = process.env;
 if (!PVZ_SESSION) {
   console.error("pvz MCP server: set PVZ_SESSION to a session file, e.g. sessions/chat.json");
   process.exit(1);
@@ -34,7 +32,7 @@ const { side, tools, clock, speed } = session.settings;
 const chat = tools.includes("start_level");
 if (!PVZ_API_URL && !chat) {
   console.error(
-    "pvz MCP server: this session plays a level that's already started (pnpm match and pnpm play start it), so set PVZ_API_URL to the game's address. " +
+    "pvz MCP server: this session plays a level that's already started, so set PVZ_API_URL to the game's address. " +
       "For a chat app, use a session with start_level, e.g. sessions/chat.json",
   );
   process.exit(1);
@@ -43,9 +41,8 @@ if (!PVZ_API_URL && !chat) {
 const ownGame = PVZ_API_URL ? undefined : new OwnGame();
 const game = ownGame ?? new GameClient(PVZ_API_URL!);
 const brief = writeBrief(await readFile(session.briefPath, "utf8"), session.settings);
-// Chat sessions and the zombie side send the brief here, for apps whose system prompt nobody sets. A
-// player that pnpm match or pnpm play starts has it as its system prompt already (D47).
-const sendsBrief = (chat || side === "zombies") && PVZ_NO_INSTRUCTIONS !== "1";
+// Chat sessions and the zombie side send the brief here, for apps whose system prompt nobody sets.
+const sendsBrief = chat || side === "zombies";
 const server = createSeatServer(session.settings, brief, {
   game,
   starter: ownGame,

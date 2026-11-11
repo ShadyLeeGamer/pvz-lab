@@ -1,7 +1,7 @@
 // Runs Claude Code as one side's player, locked down so its MCP tools are all it can use: no shell,
 // files or web, and none of your own settings. pnpm match and pnpm play start their Claude players
-// here. The player's folder gets its MCP config and Claude Code's own output (claude.jsonl); its MCP
-// server adds every tool call (moves.jsonl).
+// here, each at its seat on the host's own MCP server (D62). The player's folder gets its MCP config and
+// Claude Code's own output (claude.jsonl); the host logs every tool call at the seat (moves.jsonl).
 import { spawn } from "node:child_process";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -13,20 +13,13 @@ import type { LoadedSession, Side } from "./session.ts";
 
 const SERVER_NAME = "pvz";
 
-// The MCP server a player reaches the game through, started as a child process over stdio.
-export interface ServerCommand {
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-}
-
 export interface PlayerSpec {
   side: Side;
   session: LoadedSession; // its tools and turn limit
   brief: string; // its instructions, handed over as its system prompt (D47)
   prompt: string; // its first message
   model?: string; // the model it plays with, as Claude Code names it (D61); Claude Code's default if none
-  server: ServerCommand;
+  url: string; // its seat on the host's MCP server, over HTTP (D62)
   dir: string; // where its files go
   // Where its lines go as it plays. None while a person plays the other side (D33).
   print?: (line: string) => void;
@@ -84,6 +77,11 @@ export function playerEnvironment(from: NodeJS.ProcessEnv = process.env): Record
   return env;
 }
 
+// The MCP config a player gets: its seat, and nothing else.
+export function playerMcpConfig(url: string): string {
+  return `${JSON.stringify({ mcpServers: { [SERVER_NAME]: { type: "http", url } } }, null, 2)}\n`;
+}
+
 // Claude Code's arguments for a player, after any the program itself needs (findClaude's prefix): only
 // its MCP server's tools, never asking, with its brief as the system prompt.
 export function claudeArgs(spec: PlayerSpec, mcpConfig: string): string[] {
@@ -127,7 +125,7 @@ export function launchClaudePlayer(spec: PlayerSpec): Player {
   const run = async (): Promise<PlayerEnd> => {
     const claude = findClaude();
     const mcpConfig = join(spec.dir, "mcp.json");
-    await writeFile(mcpConfig, `${JSON.stringify({ mcpServers: { [SERVER_NAME]: { type: "stdio", ...spec.server } } }, null, 2)}\n`);
+    await writeFile(mcpConfig, playerMcpConfig(spec.url));
     const args = [...claude.prefix, ...claudeArgs(spec, mcpConfig)];
     const expectedTools = spec.session.settings.tools.map((tool) => `mcp__${SERVER_NAME}__${tool}`).sort();
 

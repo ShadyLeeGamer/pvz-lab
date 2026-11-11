@@ -7,6 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import type { Game } from "../../src/game-client.ts";
 import type { GameStarter } from "../../src/mcp/own-game.ts";
+import { Lobby, NO_READY_CHECK, NOT_READY, sleep } from "../../src/mcp/shared.ts";
 import { registerPlantTools } from "../../src/plants/tools.ts";
 import type { ToolName } from "../../src/session.ts";
 import { fixture, fixtureAt, reply, savedReply } from "../fixtures/fixture.ts";
@@ -27,11 +28,12 @@ interface Options {
   clock?: "waits" | "realtime";
   speed?: number;
   starter?: GameStarter;
+  lobby?: Lobby;
 }
 
 async function connect(game: Game, tools = ALL_TOOLS, options: Options = {}): Promise<Client> {
   const server = new McpServer({ name: "pvz", version: "test" });
-  registerPlantTools(server, tools, { game, clock: options.clock ?? "waits", speed: options.speed ?? 1, starter: options.starter });
+  registerPlantTools(server, tools, { game, clock: options.clock ?? "waits", speed: options.speed ?? 1, starter: options.starter, lobby: options.lobby });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const client = new Client({ name: "test", version: "test" });
@@ -272,6 +274,88 @@ describe("choose_seeds, for a level someone else started", () => {
     const { text, isError } = await call(await connect(game, MATCH_TOOLS, { clock: "realtime" }), "choose_seeds", { seeds: SEEDS });
     expect(isError).toBe(true);
     expect(text).toBe("There's no seed chooser open: the seed packets are already chosen.");
+  });
+});
+
+describe("before a match with a player on each side starts (D62)", () => {
+  const MATCH_TOOLS: ToolName[] = ["choose_seeds", "ready", ...ALL_TOOLS];
+  const SEEDS = ["peashooter", "sunflower", "cherry_bomb", "wall_nut", "potato_mine", "snow_pea"];
+  const zombiesReady = () => {
+    const lobby = new Lobby(["plants", "zombies"]);
+    lobby.markReady("zombies");
+    return lobby;
+  };
+  // Starts the match as the host does, once the plants have said they're ready.
+  const startOnReady = async (lobby: Lobby) => {
+    while (!lobby.isReady("plants")) await sleep(10);
+    lobby.start();
+  };
+
+  it("refuses the plants' moves until they're ready, while get_state shows the game under why", async () => {
+    const game = new StandInGame(fixture("1-9-versus-plants"));
+    const client = await connect(game, MATCH_TOOLS, { clock: "realtime", lobby: zombiesReady() });
+    for (const [tool, args] of [
+      ["place_plant", { plant: "peashooter", col: 0, row: 2 }],
+      ["dig_up", { col: 0, row: 2 }],
+      ["collect_sun", {}],
+      ["wait", { seconds: 5 }],
+    ] as const) {
+      expect(await call(client, tool, args), tool).toEqual({ isError: true, text: NOT_READY });
+    }
+    expect(game.actions).toEqual([]);
+    const { text, isError } = await call(client, "get_state");
+    expect(isError).toBe(false);
+    expect(text.split("\n\n")[0]).toBe(NOT_READY);
+    expect(text).toContain("Seed packets:");
+  });
+
+  it("lets the plants choose their seeds, then says to call ready", async () => {
+    const game = new StandInGame(fixture("1-9-versus-plants"));
+    game.controlReplies.chooseSeeds = reply("seeds-chosen");
+    const { text, isError } = await call(await connect(game, MATCH_TOOLS, { clock: "realtime", lobby: zombiesReady() }), "choose_seeds", { seeds: SEEDS });
+    expect(isError).toBe(false);
+    expect(text.split("\n")[0]).toBe(`Chose ${SEEDS.join(", ")}. Call ready once you're set: the match starts when every player is ready.`);
+  });
+
+  it("ready waits for the seed packets to be chosen first", async () => {
+    const lobby = zombiesReady();
+    const { text, isError } = await call(await connect(new StandInGame(fixture("1-9-versus-chooser")), MATCH_TOOLS, { clock: "realtime", lobby }), "ready");
+    expect({ text, isError }).toEqual({ isError: true, text: "Choose your seed packets with choose_seeds first: the level is waiting for them." });
+    expect(lobby.isReady("plants")).toBe(false);
+  });
+
+  it("ready says the plants are ready, waits for the match to start, then shows the game, and moves go through", async () => {
+    const lobby = zombiesReady();
+    const game = new StandInGame(fixture("1-9-versus-plants"));
+    const client = await connect(game, MATCH_TOOLS, { clock: "realtime", lobby });
+    const [{ text, isError }] = await Promise.all([call(client, "ready"), startOnReady(lobby)]);
+    expect(isError).toBe(false);
+    expect(text.split("\n\n")[0]).toBe("Everyone's ready: the match has started.");
+    expect(text).toContain("Seed packets:");
+    expect((await call(client, "place_plant", { plant: "peashooter", col: 0, row: 2 })).isError).toBe(false);
+    expect(game.actions.map((action) => action.type)).toEqual(["placePlant"]);
+  });
+
+  it("once ready, a move says whom the match waits for, and wait waits for the start", async () => {
+    const lobby = new Lobby(["plants", "zombies"]);
+    lobby.markReady("plants");
+    const game = new StandInGame(fixture("1-9-versus-plants"));
+    const client = await connect(game, MATCH_TOOLS, { clock: "realtime", lobby });
+    expect(await call(client, "collect_sun")).toEqual({
+      isError: true,
+      text: "The match hasn't started yet: it's waiting for the zombies' player. Call wait to wait for the start.",
+    });
+    const [{ text, isError }] = await Promise.all([call(client, "wait", { seconds: 30 }), sleep(50).then(() => lobby.start())]);
+    expect(isError).toBe(false);
+    expect(text.split("\n\n")[0]).toBe("Everyone's ready: the match has started.");
+    expect(game.controls).toEqual([]);
+  });
+
+  it("without a ready check, ready says so", async () => {
+    expect(await call(await connect(new StandInGame(fixture("1-9-versus-plants")), ["ready", ...ALL_TOOLS], { clock: "realtime" }), "ready")).toEqual({
+      isError: false,
+      text: NO_READY_CHECK,
+    });
   });
 });
 

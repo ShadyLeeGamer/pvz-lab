@@ -4,16 +4,16 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
 
-export const TOOL_NAMES = ["start_level", "choose_seeds", "get_state", "place_plant", "dig_up", "collect_sun", "wait", "send_zombie"] as const;
+export const TOOL_NAMES = ["start_level", "choose_seeds", "ready", "get_state", "place_plant", "dig_up", "collect_sun", "wait", "send_zombie"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 export const MAX_SPEED = 50; // the game's fastest speed (kMaxSpeed in Clock.h)
 
 export const SIDES = ["plants", "zombies"] as const;
 export type Side = (typeof SIDES)[number];
-// The tools each side may be given: get_state and wait serve both, with each side's own view.
+// The tools each side may be given: ready, get_state and wait serve both, with each side's own view.
 export const SIDE_TOOLS: Record<Side, readonly ToolName[]> = {
-  plants: ["start_level", "choose_seeds", "get_state", "place_plant", "dig_up", "collect_sun", "wait"],
-  zombies: ["get_state", "send_zombie", "wait"],
+  plants: ["start_level", "choose_seeds", "ready", "get_state", "place_plant", "dig_up", "collect_sun", "wait"],
+  zombies: ["ready", "get_state", "send_zombie", "wait"],
 };
 
 export const Session = z.object({
@@ -59,7 +59,7 @@ export const Session = z.object({
     path: ["tools"],
   })
   .refine((session) => session.tools.every((tool) => SIDE_TOOLS[session.side].includes(tool)), {
-    message: 'the plants\' side takes start_level, choose_seeds, get_state, place_plant, dig_up, collect_sun and wait; the zombies\' side takes get_state, send_zombie and wait',
+    message: 'the plants\' side takes start_level, choose_seeds, ready, get_state, place_plant, dig_up, collect_sun and wait; the zombies\' side takes ready, get_state, send_zombie and wait',
     path: ["tools"],
   })
   // The zombie side never starts a level or picks its seeds, and it can't hold the clock: the plants

@@ -1,10 +1,26 @@
-// The tools the plants' side plays with: look, plant, dig up, collect sun, let time pass. The game
-// carries out every move and decides what's allowed; these functions only translate and describe.
+// The tools the plants' side plays with: look, plant, dig up, collect sun, let time pass, and in a match,
+// say it's ready. The game carries out every move and decides what's allowed; these functions only
+// translate and describe.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { streetLine } from "../board-text.ts";
 import type { ApiError, GameState } from "../game-client.ts";
-import { LEVEL_OVER, levelIsOver, logged, MAX_WAIT_SECONDS, normalizeName, reply, sleep, TICKS_PER_SECOND, type ToolContext, waitGameTime } from "../mcp/shared.ts";
+import {
+  awaitStart,
+  LEVEL_OVER,
+  levelIsOver,
+  logged,
+  MAX_WAIT_SECONDS,
+  NO_READY_CHECK,
+  normalizeName,
+  notStartedYet,
+  reply,
+  sleep,
+  TICKS_PER_SECOND,
+  type ToolContext,
+  waitBeforeStart,
+  waitGameTime,
+} from "../mcp/shared.ts";
 import type { ToolName } from "../session.ts";
 import { summarizePlants } from "./summary.ts";
 
@@ -126,7 +142,30 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
             if (result.error.code === "not_at_seed_chooser") return reply("There's no seed chooser open: the seed packets are already chosen.", true);
             return reply(`Not chosen: ${result.error.message}.`, true);
           }
-          return reply(`Chose ${(seeds ?? []).join(", ")}. Play is starting.\n\n${await show()}`);
+          const next = context.lobby && !context.lobby.started ? "Call ready once you're set: the match starts when every player is ready." : "Play is starting.";
+          return reply(`Chose ${(seeds ?? []).join(", ")}. ${next}\n\n${await show()}`);
+        }),
+    );
+  }
+
+  // A match with a player on each side starts once every player has said it's ready (D62). The plants
+  // choose their seed packets first, as play only begins once they have.
+  if (enabled.has("ready")) {
+    server.registerTool(
+      "ready",
+      {
+        title: "Say you're ready",
+        description:
+          "Tells the match you're set to play, then waits up to 30 s for it to start, and shows the game. The match starts when every " +
+          "player is ready, and your moves are refused until then. If the level asks for seed packets, choose them first.",
+      },
+      () =>
+        logged(context, "ready", {}, async () => {
+          const { lobby } = context;
+          if (!lobby) return reply(NO_READY_CHECK);
+          if ((await game.state()).scene === "level_intro") return reply("Choose your seed packets with choose_seeds first: the level is waiting for them.", true);
+          lobby.markReady("plants");
+          return reply(`${await awaitStart(lobby)}\n\n${await show()}`);
         }),
     );
   }
@@ -140,7 +179,12 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
         // In real time it can be the tool that sees a win, and then it collects the award.
         annotations: { readOnlyHint: context.clock === "waits" },
       },
-      () => logged(context, "get_state", {}, async () => reply(noGameYet() ? NO_GAME_YET : await show())),
+      () =>
+        logged(context, "get_state", {}, async () => {
+          if (noGameYet()) return reply(NO_GAME_YET);
+          const early = notStartedYet(context, "plants");
+          return reply(`${early ? `${early}\n\n` : ""}${await show()}`);
+        }),
     );
   }
 
@@ -162,6 +206,8 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
       (input) =>
         logged(context, "place_plant", input, async () => {
           if (noGameYet()) return reply(NO_GAME_YET, true);
+          const early = notStartedYet(context, "plants");
+          if (early) return reply(early, true);
           const { state, levelName } = await look(context);
           if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
           const packets = state.board!.seedPackets;
@@ -195,6 +241,8 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
       (input) =>
         logged(context, "dig_up", input, async () => {
           if (noGameYet()) return reply(NO_GAME_YET, true);
+          const early = notStartedYet(context, "plants");
+          if (early) return reply(early, true);
           const { state, levelName } = await look(context);
           if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
           const plant = input.plant === undefined ? undefined : normalizeName(input.plant);
@@ -216,6 +264,8 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
       () =>
         logged(context, "collect_sun", {}, async () => {
           if (noGameYet()) return reply(NO_GAME_YET, true);
+          const early = notStartedYet(context, "plants");
+          if (early) return reply(early, true);
           const { state, levelName } = await look(context);
           if (levelIsOver(state)) return reply(endOfLevel(state, levelName), true);
           const result = await game.act({ type: "collectSun" });
@@ -243,6 +293,9 @@ export function registerPlantTools(server: McpServer, tools: readonly ToolName[]
       (input) =>
         logged(context, "wait", input, async () => {
           if (noGameYet()) return reply(NO_GAME_YET, true);
+          // Before the match starts, a player that's ready waits for the start instead (D62).
+          const early = await waitBeforeStart(context, "plants");
+          if (early) return reply(early.refused ? early.line : `${early.line}\n\n${await show()}`, early.refused);
           const { state: before, levelName } = await look(context);
           if (levelIsOver(before)) return reply(endOfLevel(before, levelName), true);
           if (context.clock === "waits") {

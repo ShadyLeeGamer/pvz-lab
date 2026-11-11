@@ -6,13 +6,15 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import type { Game } from "../../src/game-client.ts";
+import { Lobby, NOT_READY } from "../../src/mcp/shared.ts";
 import { registerZombieTools } from "../../src/zombies/tools.ts";
 import { fixture, fixtureAt, reply } from "../fixtures/fixture.ts";
 import { StandInGame } from "../stand-in-game.ts";
 
-async function connect(game: Game, speed = 1): Promise<Client> {
+// With a lobby, as in a match with a player on each side, the zombies get ready too (D62).
+async function connect(game: Game, speed = 1, lobby?: Lobby): Promise<Client> {
   const server = new McpServer({ name: "pvz", version: "test" });
-  registerZombieTools(server, ["get_state", "send_zombie", "wait"], { game, clock: "realtime", speed });
+  registerZombieTools(server, [...(lobby ? (["ready"] as const) : []), "get_state", "send_zombie", "wait"], { game, clock: "realtime", speed, lobby });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const client = new Client({ name: "test", version: "test" });
@@ -133,6 +135,35 @@ describe("zombie tools", () => {
       isError: true,
       text: "Not sent: the level hasn't started yet, as the plants are choosing their seed packets.",
     });
+  });
+
+  it("before a match with a player on each side starts, refuses sends and waits until the zombies are ready, while get_state shows the game under why (D62)", async () => {
+    const game = new StandInGame(fixture("1-9-versus-zombies-chooser"));
+    const client = await connect(game, 1, new Lobby(["plants", "zombies"]));
+    expect(await call(client, "send_zombie", { zombie: "zombie", row: 2 })).toEqual({ isError: true, text: NOT_READY });
+    expect(await call(client, "wait", { seconds: 30 })).toEqual({ isError: true, text: NOT_READY });
+    expect(game.actions).toEqual([]);
+    const { text, isError } = await call(client, "get_state");
+    expect(isError).toBe(false);
+    expect(text.split("\n\n")[0]).toBe(NOT_READY);
+    expect(text).toContain("The level hasn't started yet: the plants are choosing their seed packets.");
+  });
+
+  it("ready says the zombies are ready, even while the plants choose their seeds, and waits for the match to start", async () => {
+    const lobby = new Lobby(["plants", "zombies"]);
+    lobby.markReady("plants");
+    const game = new StandInGame(fixture("1-9-versus-zombies-chooser"));
+    const client = await connect(game, 1, lobby);
+    const startOnReady = async () => {
+      while (!lobby.isReady("zombies")) await new Promise((resolve) => setTimeout(resolve, 10));
+      lobby.start();
+    };
+    const [{ text, isError }] = await Promise.all([call(client, "ready"), startOnReady()]);
+    expect(isError).toBe(false);
+    expect(text.split("\n\n")[0]).toBe("Everyone's ready: the match has started.");
+    expect(text).toContain("The level hasn't started yet: the plants are choosing their seed packets.");
+    game.replies.sendZombie = reply("send-at-seed-chooser");
+    expect((await call(client, "send_zombie", { zombie: "zombie", row: 2 })).text).toBe("Not sent: the level hasn't started yet, as the plants are choosing their seed packets.");
   });
 
   it("wait ends when the level does, with the result told from the zombies' side", async () => {
