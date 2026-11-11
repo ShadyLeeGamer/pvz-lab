@@ -165,7 +165,8 @@ describe("matches with scripted players (launch the game; need agent/.env)", () 
 
   it("plays 1-9 in versus with both seats taken by URL, starting game time once both players have moved since play began (D56)", async () => {
     const printed: string[] = [];
-    const match = runMatch(matchFromFlags(["1-9", "--plants", "url", "--zombies", "url", "--speed", "50"]), { print: (line) => printed.push(line), runsDir });
+    const seatsDir = join(runsDir, "seats");
+    const match = runMatch(matchFromFlags(["1-9", "--plants", "url", "--zombies", "url", "--speed", "50"]), { print: (line) => printed.push(line), runsDir, seatsDir });
     // The link the host prints for a seat, once it has.
     const link = async (side: Side): Promise<string> => {
       const label = `The ${side}' seat: `;
@@ -222,6 +223,11 @@ describe("matches with scripted players (launch the game; need agent/.env)", () 
     expect(lines(join(runDir, "zombies", "moves.jsonl")).length).toBe(result.players.zombies!.toolCalls);
     expect(JSON.parse(readFileSync(join(runDir, "zombies", "mcp.json"), "utf8")).mcpServers.pvz.url).toBe(await link("zombies"));
     expect(readFileSync(join(runDir, "zombies", "claude.cmd"), "utf8")).toContain("--strict-mcp-config");
+    // Each seat's own folder has this match's link, for apps that play from it, such as Antigravity CLI.
+    for (const side of ["plants", "zombies"] as const) {
+      expect(JSON.parse(readFileSync(join(seatsDir, side, ".agents", "mcp_config.json"), "utf8")).mcpServers.pvz.serverUrl).toBe(await link(side));
+      expect(readFileSync(join(runDir, side, "agy.cmd"), "utf8")).toContain(`cd /d "${join(seatsDir, side)}"`);
+    }
     expect(printed.at(-1)).toMatch(/^Result: level 1-9: the (plants|zombies) won\. Plants \(url-plants test\): \d+ tool calls\. Zombies \(url-zombies test\): \d+ tool calls\.$/);
   }, 300_000);
 

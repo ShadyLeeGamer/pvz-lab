@@ -7,7 +7,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { afterEach, describe, expect, it } from "vitest";
 import { matchFromFlags, seatSession } from "../src/match.ts";
 import type { Side } from "../src/session.ts";
-import { claudeLauncher, joinLines, openUrlSeats, type SeatSpec, type UrlSeats } from "../src/url-seats.ts";
+import { AGY_SETTINGS, agyLauncher, claudeLauncher, joinLines, openUrlSeats, seatFolderFiles, type SeatSpec, type UrlSeats } from "../src/url-seats.ts";
 import { sleep } from "../src/mcp/shared.ts";
 import { fixture, fixtureAt } from "./fixtures/fixture.ts";
 import { StandInGame } from "./stand-in-game.ts";
@@ -138,20 +138,27 @@ describe("URL seats", () => {
 describe("joining a URL seat", () => {
   const url = "http://127.0.0.1:50123/mcp/zombies/abc";
 
+  const folder = "C:\\seats\\zombies";
+
   it("tells each app how to take the seat", () => {
-    expect(joinLines("zombies", url, "C:\\runs\\match\\zombies\\claude.cmd")).toEqual([
+    expect(joinLines("zombies", url, { claude: "C:\\runs\\match\\zombies\\claude.cmd", agy: "C:\\runs\\match\\zombies\\agy.cmd", folder })).toEqual([
       `The zombies' seat: ${url}`,
       "  Claude Code, locked down to this seat: run C:\\runs\\match\\zombies\\claude.cmd in a new terminal.",
-      "  Other apps keep their own tools (files, shell and so on), so they aren't locked down:",
-      `    Gemini CLI:  gemini mcp add --transport http pvz-zombies ${url}`,
-      `    VS Code:     in .vscode/mcp.json, "servers": { "pvz-zombies": { "type": "http", "url": "${url}" } }`,
-      `    Cursor:      in .cursor/mcp.json, "mcpServers": { "pvz-zombies": { "url": "${url}" } }`,
-      `    Antigravity: in mcp_config.json, "mcpServers": { "pvz-zombies": { "serverUrl": "${url}" } }`,
+      "  Antigravity CLI (Gemini), locked down to this seat but for web search: run C:\\runs\\match\\zombies\\agy.cmd in a new terminal.",
+      "  VS Code and Cursor keep their own tools, so they aren't locked down: open C:\\seats\\zombies, whose .vscode and .cursor configs have this match's link.",
     ]);
   });
 
+  it("writes the seat's link into its folder for Antigravity, VS Code and Cursor, each in its own format", () => {
+    const files = seatFolderFiles(url);
+    expect(Object.keys(files).sort()).toEqual([".agents/mcp_config.json", ".cursor/mcp.json", ".vscode/mcp.json"]);
+    expect(JSON.parse(files[".agents/mcp_config.json"]!)).toEqual({ mcpServers: { pvz: { serverUrl: url } } });
+    expect(JSON.parse(files[".vscode/mcp.json"]!)).toEqual({ servers: { pvz: { type: "http", url } } });
+    expect(JSON.parse(files[".cursor/mcp.json"]!)).toEqual({ mcpServers: { pvz: { url } } });
+  });
+
   it("opens Claude Code locked down to the seat, as the players pnpm match launches are", () => {
-    const lines = claudeLauncher(["C:\\bin\\claude.exe"], "C:\\runs\\match\\zombies\\mcp.json", "zombies", 'Play the zombies: 100% "now".').split("\r\n");
+    const lines = claudeLauncher(["C:\\bin\\claude.exe"], "C:\\runs\\match\\zombies\\mcp.json", folder, "zombies", 'Play the zombies: 100% "now".').split("\r\n");
     expect(lines).toEqual([
       "@echo off",
       "rem Opens Claude Code to play the zombies at its seat in this match, locked down to the seat's tools.",
@@ -160,10 +167,26 @@ describe("joining a URL seat", () => {
       "set ANTHROPIC_AUTH_TOKEN=",
       "set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1",
       "set CLAUDE_CODE_DISABLE_CLAUDE_MDS=1",
-      'if not exist "%TEMP%\\pvz-lab-seat-zombies" mkdir "%TEMP%\\pvz-lab-seat-zombies"',
-      'cd /d "%TEMP%\\pvz-lab-seat-zombies"',
+      'if not exist "C:\\seats\\zombies" mkdir "C:\\seats\\zombies"',
+      'cd /d "C:\\seats\\zombies"',
       '"C:\\bin\\claude.exe" --tools "" --mcp-config "C:\\runs\\match\\zombies\\mcp.json" --strict-mcp-config --allowedTools "mcp__pvz__*" --permission-mode dontAsk --setting-sources project "Play the zombies: 100%% \'now\'."',
       "",
     ]);
+  });
+
+  it("opens Antigravity CLI in the seat's folder, with the seat's tools allowed and its own refused", () => {
+    const lines = agyLauncher("C:\\bin\\agy.exe", "C:\\runs\\match\\zombies\\agy-settings.json", folder, "zombies", "Play the zombies.").split("\r\n");
+    expect(lines).toEqual([
+      "@echo off",
+      "rem Opens Antigravity CLI to play the zombies at its seat in this match, locked down to the seat's tools.",
+      "setlocal",
+      'if not exist "C:\\seats\\zombies" mkdir "C:\\seats\\zombies"',
+      'cd /d "C:\\seats\\zombies"',
+      '"C:\\bin\\agy.exe" --settings "C:\\runs\\match\\zombies\\agy-settings.json" -i "Play the zombies."',
+      "",
+    ]);
+    expect(JSON.parse(AGY_SETTINGS)).toEqual({
+      permissions: { allow: ["mcp(pvz/*)"], deny: ["command(*)", "read_file(*)", "write_file(*)", "read_url(*)", "execute_url(*)"] },
+    });
   });
 });

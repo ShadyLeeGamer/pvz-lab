@@ -10,7 +10,8 @@
 // for a Claude player or a command that opens Claude Code at a URL seat.
 import { appendFileSync, existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { streetLine } from "./board-text.ts";
@@ -21,7 +22,18 @@ import { launchGame, readGameConfig } from "./game-process.ts";
 import { LEVEL_OVER, normalizeName, sleep } from "./mcp/shared.ts";
 import { findClaude, launchClaudePlayer, type LaunchPlayer, type Player, type PlayerEnd } from "./player.ts";
 import { loadSession, MAX_SPEED, Session, SIDES, type LoadedSession, type Side } from "./session.ts";
-import { claudeLauncher, joinLines, openUrlSeats, type SeatSpec, type UrlSeat, type UrlSeats } from "./url-seats.ts";
+import {
+  AGY_SETTINGS,
+  agyLauncher,
+  claudeLauncher,
+  findAgy,
+  joinLines,
+  openUrlSeats,
+  seatFolderFiles,
+  type SeatSpec,
+  type UrlSeat,
+  type UrlSeats,
+} from "./url-seats.ts";
 
 const serverScript = fileURLToPath(new URL("./mcp/server.ts", import.meta.url));
 const promptsDir = new URL("../prompts/", import.meta.url);
@@ -92,6 +104,7 @@ export interface MatchOptions {
   launchPlayer?: LaunchPlayer; // the end-to-end tests play with scripted players instead of Claude Code
   print?: (line: string) => void;
   runsDir?: string;
+  seatsDir?: string; // where URL seats' own folders go: PVZ_SEATS_DIR in agent/.env, else a temporary folder
   signal?: AbortSignal; // Ctrl+C: stops the players and ends the match
 }
 
@@ -278,13 +291,23 @@ export async function runMatch(settings: MatchSettings, options: MatchOptions = 
       }
       urlSeats = await openUrlSeats(specs, (side, app) => print(`${label(side)}${app} took the ${side}' seat.`));
       const claude = findClaude();
+      const seatsDir = options.seatsDir ?? process.env.PVZ_SEATS_DIR ?? join(tmpdir(), "pvz-lab-seats");
       for (const seat of urlSeats.seats.values()) {
         const { dir, prompt } = prompts.get(seat.side)!;
+        // The seat's own folder, outside this repo, where any app plays from; each match writes its link there.
+        const folder = join(seatsDir, seat.side);
+        for (const [file, content] of Object.entries(seatFolderFiles(seat.url))) {
+          await mkdir(dirname(join(folder, file)), { recursive: true });
+          await writeFile(join(folder, file), content);
+        }
         const mcpConfig = join(dir, "mcp.json");
         await writeFile(mcpConfig, `${JSON.stringify({ mcpServers: { pvz: { type: "http", url: seat.url } } }, null, 2)}\n`);
-        const launcher = join(dir, "claude.cmd");
-        await writeFile(launcher, claudeLauncher([claude.command, ...claude.prefix], mcpConfig, seat.side, prompt));
-        for (const line of joinLines(seat.side, seat.url, launcher)) print(line);
+        const agySettings = join(dir, "agy-settings.json");
+        await writeFile(agySettings, AGY_SETTINGS);
+        const launchers = { claude: join(dir, "claude.cmd"), agy: join(dir, "agy.cmd"), folder };
+        await writeFile(launchers.claude, claudeLauncher([claude.command, ...claude.prefix], mcpConfig, folder, seat.side, prompt));
+        await writeFile(launchers.agy, agyLauncher(findAgy(), agySettings, folder, seat.side, prompt));
+        for (const line of joinLines(seat.side, seat.url, launchers)) print(line);
       }
       // Until a seat's player has made its first move, and again while the lobby waits for one.
       callsBefore = new Map([...urlSeats.seats.values()].map((seat) => [seat, seat.toolCalls]));

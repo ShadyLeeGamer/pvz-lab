@@ -5,8 +5,10 @@
 // Host but this PC's own names, and a request from a web page is refused unless the page is this server's
 // own (Origin, D30).
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { existsSync } from "node:fs";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -116,28 +118,53 @@ export async function openUrlSeats(specs: Map<Side, SeatSpec>, onJoin?: (side: S
   };
 }
 
-// What the host prints so a person can put an app in a seat: a command that opens Claude Code locked
-// down to the seat (D55), and the setup for other apps, which keep their own tools.
-export function joinLines(side: Side, url: string, claudeLauncher: string): string[] {
-  const name = `pvz-${side}`;
+// The files an app finds the seat's link in when it plays from the seat's own folder, by path within
+// that folder: Antigravity's workspace config, VS Code's and Cursor's. Each match writes them afresh.
+export function seatFolderFiles(url: string): Record<string, string> {
+  const json = (content: object) => `${JSON.stringify(content, null, 2)}\n`;
+  return {
+    ".agents/mcp_config.json": json({ mcpServers: { pvz: { serverUrl: url } } }),
+    ".vscode/mcp.json": json({ servers: { pvz: { type: "http", url } } }),
+    ".cursor/mcp.json": json({ mcpServers: { pvz: { url } } }),
+  };
+}
+
+// Antigravity's permission rules for a player, for its session only: the seat's tools run without asking,
+// and its own tools for commands, files and fetching pages are refused ("Deny > Ask > Allow"). Its web
+// search has no rule: a search_web deny rule was ignored (Antigravity CLI 1.5.1, 6 Nov 2026).
+export const AGY_SETTINGS = `${JSON.stringify(
+  { permissions: { allow: ["mcp(pvz/*)"], deny: ["command(*)", "read_file(*)", "write_file(*)", "read_url(*)", "execute_url(*)"] } },
+  null,
+  2,
+)}\n`;
+
+// Antigravity CLI where its installer puts it, else on the PATH.
+export function findAgy(): string {
+  const installed = join(process.env.LOCALAPPDATA ?? "", "agy", "bin", "agy.exe");
+  return existsSync(installed) ? installed : "agy";
+}
+
+// What the host prints so a person can put an app in a seat: commands that open Claude Code or
+// Antigravity CLI locked down to the seat (D55), and the seat's folder, which other apps can open.
+export function joinLines(side: Side, url: string, launchers: { claude: string; agy: string; folder: string }): string[] {
   return [
     `The ${side}' seat: ${url}`,
-    `  Claude Code, locked down to this seat: run ${claudeLauncher} in a new terminal.`,
-    "  Other apps keep their own tools (files, shell and so on), so they aren't locked down:",
-    `    Gemini CLI:  gemini mcp add --transport http ${name} ${url}`,
-    `    VS Code:     in .vscode/mcp.json, "servers": { "${name}": { "type": "http", "url": "${url}" } }`,
-    `    Cursor:      in .cursor/mcp.json, "mcpServers": { "${name}": { "url": "${url}" } }`,
-    `    Antigravity: in mcp_config.json, "mcpServers": { "${name}": { "serverUrl": "${url}" } }`,
+    `  Claude Code, locked down to this seat: run ${launchers.claude} in a new terminal.`,
+    `  Antigravity CLI (Gemini), locked down to this seat but for web search: run ${launchers.agy} in a new terminal.`,
+    `  VS Code and Cursor keep their own tools, so they aren't locked down: open ${launchers.folder}, whose .vscode and .cursor configs have this match's link.`,
   ];
 }
+
+// Folder and message as a Windows command file needs them.
+const cmdFolder = (folder: string) => [`if not exist "${folder}" mkdir "${folder}"`, `cd /d "${folder}"`];
+const cmdText = (text: string) => text.replaceAll("%", "%%").replaceAll('"', "'");
 
 // A Windows command file that opens Claude Code in a chat of its own at a seat, locked down like the
 // players pnpm match starts itself (player.ts): only the seat's tools, so no files, shell or web; no
 // memory or CLAUDE.md files; none of your settings; and no API key, so it plays on your subscription.
-// claude is the program and any arguments before Claude Code's own, as findClaude() gives them.
-export function claudeLauncher(claude: string[], mcpConfig: string, side: Side, prompt: string): string {
-  const folder = `%TEMP%\\pvz-lab-seat-${side}`; // empty, outside this repo, so no project files or settings
-  const message = prompt.replaceAll("%", "%%").replaceAll('"', "'");
+// claude is the program and any arguments before Claude Code's own, as findClaude() gives them. folder
+// is the seat's own folder, outside this repo, so no project files or settings.
+export function claudeLauncher(claude: string[], mcpConfig: string, folder: string, side: Side, prompt: string): string {
   return [
     "@echo off",
     `rem Opens Claude Code to play the ${side} at its seat in this match, locked down to the seat's tools.`,
@@ -146,9 +173,21 @@ export function claudeLauncher(claude: string[], mcpConfig: string, side: Side, 
     "set ANTHROPIC_AUTH_TOKEN=",
     "set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1",
     "set CLAUDE_CODE_DISABLE_CLAUDE_MDS=1",
-    `if not exist "${folder}" mkdir "${folder}"`,
-    `cd /d "${folder}"`,
-    `${claude.map((part) => `"${part}"`).join(" ")} --tools "" --mcp-config "${mcpConfig}" --strict-mcp-config --allowedTools "mcp__pvz__*" --permission-mode dontAsk --setting-sources project "${message}"`,
+    ...cmdFolder(folder),
+    `${claude.map((part) => `"${part}"`).join(" ")} --tools "" --mcp-config "${mcpConfig}" --strict-mcp-config --allowedTools "mcp__pvz__*" --permission-mode dontAsk --setting-sources project "${cmdText(prompt)}"`,
+    "",
+  ].join("\r\n");
+}
+
+// The same for Antigravity CLI, which plays on your Google account: it starts in the seat's folder,
+// whose .agents config has the seat's link, with AGY_SETTINGS for this session only.
+export function agyLauncher(agy: string, settings: string, folder: string, side: Side, prompt: string): string {
+  return [
+    "@echo off",
+    `rem Opens Antigravity CLI to play the ${side} at its seat in this match, locked down to the seat's tools.`,
+    "setlocal",
+    ...cmdFolder(folder),
+    `"${agy}" --settings "${settings}" -i "${cmdText(prompt)}"`,
     "",
   ].join("\r\n");
 }

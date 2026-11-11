@@ -41,9 +41,11 @@ The game window opens without taking the keyboard, so you can keep working while
 - `--speed` sets how fast game time runs, from 1 (normal, the default) to 50. A person always plays at normal speed.
 
 URL seats (`url`):
-- The host serves each URL seat's MCP tools over HTTP at `http://127.0.0.1:<port>/mcp/<side>/<token>`, and prints the link with ready-to-paste setup for Claude Code, Gemini CLI, VS Code, Cursor and Antigravity. The port and the tokens are new every match, so set the seat up again each time.
-- For Claude Code it writes `claude.cmd` in the seat's folder: run it in a new terminal, and it opens a chat that's locked down like the players the host launches, with only that seat's tools (no files, shell or web), no memory or CLAUDE.md files, none of your settings, and no API key. The first time, Claude Code asks you to trust its empty folder in `%TEMP%`. You can watch the chat as it plays.
-- Other apps keep their own tools, so they can read files (including the run folders) unless you set them up not to.
+- The host serves each URL seat's MCP tools over HTTP at `http://127.0.0.1:<port>/mcp/<side>/<token>` and prints the link. The port and the tokens are new every match.
+- Each seat also has a folder of its own, outside this repo, that apps play from: `<PVZ_SEATS_DIR>\plants` and `<PVZ_SEATS_DIR>\zombies` (set in `.env`), or a temporary folder. Every match writes its link into that folder's configs for Antigravity (`.agents\mcp_config.json`), VS Code (`.vscode\mcp.json`) and Cursor (`.cursor\mcp.json`), so an app opened there finds this match's seat.
+- For Claude Code it writes `claude.cmd` in the seat's run folder: run it in a new terminal, and it opens a chat in the seat's folder that's locked down like the players the host launches, with only that seat's tools (no files, shell or web), no memory or CLAUDE.md files, none of your settings, and no API key. The first time, Claude Code asks you to trust the folder. You can watch the chat as it plays.
+- For Antigravity CLI (`agy`, Gemini, free with a personal Google account) it writes `agy.cmd`: it opens `agy` in the seat's folder with the seat's tools allowed without asking and its own tools for commands, files and fetching pages refused, for that session only. Its web search can't be turned off: a deny rule for it is ignored. Sign in once by running `agy` yourself, in an empty folder.
+- Other apps, such as VS Code or Cursor opened in the seat's folder, keep their own tools, so they can read files (including the run folders) unless you set them up not to.
 - The seat's brief comes from the server, as the app's instructions. An app that connects again gets a new session for the same seat.
 - Only this PC can connect: the server listens on 127.0.0.1, refuses any `Host` but this PC's names and any web page's `Origin` but its own, and each seat has its own random token, so one side's link can't reach the other seat.
 - The host waits for each URL seat's player with no time limit, saying so every 30 s; Ctrl+C stops the match. Apps that connect from the cloud (claude.ai, Claude Desktop's and the mobile apps' URL connectors) can't reach this PC.
@@ -56,7 +58,7 @@ How a match runs:
 - The terminal shows what each Claude player says and does, and each URL seat's moves, marked `[plants]` or `[zombies]` when both sides have a player, and each wave's pay to the zombie side. While you play, the zombie player's moves only go to the run folder.
 - The match ends when the game decides the level. A player that stops early, such as at its turn limit, is left as it is, and the level plays on without it. If nobody is left playing, the match ends there.
 - Ctrl+C stops it cleanly, as with `pnpm play`.
-- Each match is saved in `runs/<time>-match-<level>/` (not committed): `result.json`, with the winner and each player's tool calls and how it stopped, and for each player a folder named after its side, with its session, brief, MCP config and every tool call (`moves.jsonl`), plus Claude Code's own output (`claude.jsonl`) for a Claude player, or the command that opens Claude Code at a URL seat (`claude.cmd`).
+- Each match is saved in `runs/<time>-match-<level>/` (not committed): `result.json`, with the winner and each player's tool calls and how it stopped, and for each player a folder named after its side, with its session, brief, MCP config and every tool call (`moves.jsonl`), plus Claude Code's own output (`claude.jsonl`) for a Claude player, or the commands that open Claude Code or Antigravity CLI at a URL seat (`claude.cmd`, `agy.cmd`).
 
 ## Play sessions
 
