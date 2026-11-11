@@ -2,7 +2,7 @@
 
 Node tools around the pvz-lab local API (see `../docs/api.md`):
 - an MCP server, so an AI client such as Claude Code can play with a player's moves
-- `pnpm match`, which plays one level with a player on each side: you or Claude Code on the plants, the level or Claude Code on the zombies
+- `pnpm match`, which plays one level with a player on each side: you, Claude Code or another app on the plants, and the level, Claude Code or another app on the zombies
 - `pnpm play`, which runs one play session with Claude Code as the plants' player
 - end-to-end tests for the API and the MCP server
 
@@ -24,7 +24,7 @@ The game window opens without taking the keyboard, so you can keep working while
 
 ## Matches
 
-`pnpm match <level> --plants human|claude|url --zombies level|claude|url [--speed n]` plays one level with a player on each side:
+`pnpm match <level> --plants human|claude|agy|url --zombies level|claude|agy|url [--windows] [--plants-model <name>] [--zombies-model <name>] [--speed n]` plays one level with a player on each side:
 
 | Command | Who plays |
 |---|---|
@@ -33,18 +33,22 @@ The game window opens without taking the keyboard, so you can keep working while
 | `pnpm match 1-9 --plants claude --zombies claude` | Claude Code against Claude Code, in versus |
 | `pnpm match 1-9 --plants human --zombies claude` | you, against Claude Code on the zombies, in versus |
 | `pnpm match 1-9 --plants url --zombies url` | any two MCP apps on this PC, each joining by its seat's link, in versus |
+| `pnpm match 1-9 --plants claude --zombies agy --windows` | Claude Code against Antigravity CLI, each in a chat window of its own, in versus |
 
 - A Claude player is Claude Code, locked down as in `pnpm play` (below), with only its own side's tools and view.
 - `--plants human` is you, in the game window, at normal speed.
 - `url` is a seat any MCP app on this PC can take by its link (below), on either side.
+- `agy` is Antigravity CLI (Gemini, free with a personal Google account). It plays in a chat window of its own, so it needs `--windows`.
+- `--windows` opens each `claude` or `agy` player in a chat window of its own, at a URL seat (below), so you can watch it and type to it, while the terminal shows its moves. Without it, a Claude player plays in the terminal. The windows stay open after the match, for you to read and close.
+- `--plants-model` and `--zombies-model` pick a `claude` or `agy` player's model, as its app names it: `opus`, `sonnet` or `fable` for Claude Code, or one that `agy models` lists, such as `gemini-3.8-flash-high` or `gpt-oss-120b-medium`. Without them, each app uses its default.
 - `--zombies level` is the level's own waves. A player on the zombies makes it a versus level (see `../docs/api.md`), which 1-1 can't be.
 - `--speed` sets how fast game time runs, from 1 (normal, the default) to 50. A person always plays at normal speed.
 
 URL seats (`url`):
 - The host serves each URL seat's MCP tools over HTTP at `http://127.0.0.1:<port>/mcp/<side>/<token>` and prints the link. The port and the tokens are new every match.
-- Each seat also has a folder of its own, outside this repo, that apps play from: `<PVZ_SEATS_DIR>\plants` and `<PVZ_SEATS_DIR>\zombies` (set in `.env`), or a temporary folder. Every match writes its link into that folder's configs for Antigravity (`.agents\mcp_config.json`), VS Code (`.vscode\mcp.json`) and Cursor (`.cursor\mcp.json`), so an app opened there finds this match's seat.
-- For Claude Code it writes `claude.cmd` in the seat's run folder: run it in a new terminal, and it opens a chat in the seat's folder that's locked down like the players the host launches, with only that seat's tools (no files, shell or web), no memory or CLAUDE.md files, none of your settings, and no API key. The first time, Claude Code asks you to trust the folder. You can watch the chat as it plays.
-- For Antigravity CLI (`agy`, Gemini, free with a personal Google account) it writes `agy.cmd`: it opens `agy` in the seat's folder with the seat's tools allowed without asking and its own tools for commands, files and fetching pages refused, for that session only. Its web search can't be turned off: a deny rule for it is ignored. Sign in once by running `agy` yourself, in an empty folder.
+- Each seat also has a folder of its own, outside this repo, that apps play from: `<PVZ_SEATS_DIR>\plants` and `<PVZ_SEATS_DIR>\zombies` (set in `.env`), or a temporary folder. Every match writes its link into that folder's configs for Antigravity (`.agents\mcp_config.json`), VS Code (`.vscode\mcp.json`) and Cursor (`.cursor\mcp.json`), so an app opened there finds this match's seat, and the seat's brief and each of its tools with their arguments as `AGENTS.md`, which apps such as Antigravity add to their model's instructions themselves. (Antigravity doesn't pass the server's brief or the tools' arguments to its model: it saves them to files, which its player can't read.)
+- For Claude Code it writes `claude.cmd` in the seat's run folder (`--windows` opens it for you): run it in a new terminal, and it opens a chat in the seat's folder that's locked down like the players the host launches, with only that seat's tools (no files, shell or web), no memory or CLAUDE.md files, none of your settings, no API key, and no updates of Claude Code while it plays. It starts with none of the Claude Code variables of the session it's opened from. Each message waits 2 s before it's sent (a hook in `claude-settings.json`, beside `claude.cmd`), because a chat sends its first message before connecting to the seat, which then has no game tools; the seat connects within half a second. The first time, Claude Code asks you to trust the folder, and if your own CLAUDE.md imports other files, whether to allow those imports: say no (a player loads no CLAUDE.md files either way). You can watch the chat as it plays.
+- For Antigravity CLI it writes `agy.cmd` (`--windows` opens it for you): it opens `agy` in the seat's folder with the seat's tools allowed without asking, its own tools for commands, files and fetching pages refused, and the folder trusted, for that session only. Its first message hands the game to the seat's player agent (`.agents\agents\pvz-<side>.md`, written each match): a helper agent with only the seat's tools and the brief as its instructions. Antigravity's chat itself never had the seat's tools at the start, even when it waited, but a helper it starts has them from its first turn, and has no shell, files, web search or helpers of its own. Its web search can't be turned off: a deny rule for it is ignored. Sign in once by running `agy` yourself, in an empty folder.
 - Other apps, such as VS Code or Cursor opened in the seat's folder, keep their own tools, so they can read files (including the run folders) unless you set them up not to.
 - The seat's brief comes from the server, as the app's instructions. An app that connects again gets a new session for the same seat.
 - Only this PC can connect: the server listens on 127.0.0.1, refuses any `Host` but this PC's names and any web page's `Origin` but its own, and each seat has its own random token, so one side's link can't reach the other seat.
@@ -58,7 +62,7 @@ How a match runs:
 - The terminal shows what each Claude player says and does, and each URL seat's moves, marked `[plants]` or `[zombies]` when both sides have a player, and each wave's pay to the zombie side. While you play, the zombie player's moves only go to the run folder.
 - The match ends when the game decides the level. A player that stops early, such as at its turn limit, is left as it is, and the level plays on without it. If nobody is left playing, the match ends there.
 - Ctrl+C stops it cleanly, as with `pnpm play`.
-- Each match is saved in `runs/<time>-match-<level>/` (not committed): `result.json`, with the winner and each player's tool calls and how it stopped, and for each player a folder named after its side, with its session, brief, MCP config and every tool call (`moves.jsonl`), plus Claude Code's own output (`claude.jsonl`) for a Claude player, or the commands that open Claude Code or Antigravity CLI at a URL seat (`claude.cmd`, `agy.cmd`).
+- Each match is saved in `runs/<time>-match-<level>/` (not committed): `result.json`, with the winner, any models picked, and each player's tool calls and how it stopped, and for each player a folder named after its side, with its session, brief, MCP config and every tool call (`moves.jsonl`), plus Claude Code's own output (`claude.jsonl`) for a Claude player, or the commands that open Claude Code or Antigravity CLI at a URL seat (`claude.cmd`, `agy.cmd`).
 
 ## Play sessions
 
@@ -88,6 +92,7 @@ It launches its own copy of the game and starts the level, frozen. With the `"re
 - Only the session's MCP tools: no shell, files or web, and none of your other MCP servers, settings or hooks.
 - No Claude Code memory or `CLAUDE.md` files. It runs in an empty folder outside the repo, because when started inside it, Claude Code gave it the index of the notes it keeps about this project.
 - It plays on your Claude subscription. The API key variables are removed, so it never uses paid API.
+- It doesn't update Claude Code while it plays (`DISABLE_AUTOUPDATER`). A player started under `pnpm` once updated it into this folder's `node_modules` instead of where Claude Code lives, leaving the `claude` command without its program.
 
 Before Claude starts, the terminal shows the zombies waiting on the street in the level's intro, which Claude is told too, as a player would see them. Then it shows what Claude says, each tool call, and the first line of each answer, such as `Planted a peashooter at column 0, row 2.` The game window shows the rest.
 
@@ -154,7 +159,8 @@ A level started with `"versus": true` (see `../docs/api.md`) hands its zombie si
   - the zombie side's summary and tools, against the zombie side's real views of versus levels (`pnpm fixtures:capture versus` refreshes just those)
   - the plants' seed choosing and their view of a versus level (`pnpm fixtures:capture match`)
   - how `pnpm match`'s flags and `pnpm play`'s session files become a match, and the session each player gets
-  - URL seats over real HTTP on this PC: each seat's own link, tools and brief, the requests it turns away (a wrong token, the other seat's token, a foreign `Host` or `Origin`), how moves are counted, an app connecting again, and the setup lines and Claude Code command the host prints
+  - the command line a Claude player starts with, with or without a model
+  - URL seats over real HTTP on this PC: each seat's own link, tools and brief, the requests it turns away (a wrong token, the other seat's token, a foreign `Host` or `Origin`), how moves are counted, an app connecting again, the setup lines the host prints, the commands that open Claude Code and Antigravity CLI (with or without a model), and the command that opens one in a window of its own
   - the session files, the client's handling of a busy game, and the lines `pnpm play` prints (against events from a real run)
 - End-to-end tests play real levels.
   - They start 1-1 from the title screen, plant, collect sun, and win it at high speed.
@@ -163,5 +169,5 @@ A level started with `"versus": true` (see `../docs/api.md`) hands its zombie si
   - Another drives the MCP server against the game, the way Claude Code does.
   - Another runs the server the way a chat app does: it starts its own game at `start_level`, asks for seeds with their costs, and closes the game when the app closes the server.
   - Others play versus levels: the zombie side's points and sends through the API, and the zombies of 1-2 through the MCP server.
-  - Others play matches with scripted players in Claude Code's place, each starting its side's MCP server as Claude Code would: Claude against Claude on 1-9 at speed 50, with the plants picking seeds through `choose_seeds` and the zombies' player stopping early, and a play session on 1-8 with its own seeds. Another takes both seats of 1-9 by URL over HTTP, as any MCP app would, and checks that the zombies, joining first, are told the level hasn't started, and that game time waits for both players to move once play has begun.
+  - Others play matches with scripted players in Claude Code's place, each starting its side's MCP server as Claude Code would: Claude against Claude on 1-9 at speed 50, with the plants picking seeds through `choose_seeds`, a model picked for the zombies, and the zombies' player stopping early, and a play session on 1-8 with its own seeds. Another plays 1-9 with the plants at a URL seat and the zombies' `agy` player in a window (`--windows`), whose window is swapped for a scripted player joining by its seat's link over HTTP, as any MCP app would. It checks that only the zombies' window opens, with their model, that the zombies, joining first, are told the level hasn't started, and that game time waits for both players to move once play has begun.
   - A full run takes about two minutes. Set `PVZ_E2E_MUTE=1` in `.env` to run the games without sound.

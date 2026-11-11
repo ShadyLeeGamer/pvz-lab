@@ -25,6 +25,7 @@ export interface PlayerSpec {
   session: LoadedSession; // its tools and turn limit
   brief: string; // its instructions, handed over as its system prompt (D47)
   prompt: string; // its first message
+  model?: string; // the model it plays with, as Claude Code names it (D61); Claude Code's default if none
   server: ServerCommand;
   dir: string; // where its files go
   // Where its lines go as it plays. None while a person plays the other side (D33).
@@ -68,17 +69,48 @@ export function findClaude(): { command: string; prefix: string[] } {
 // session, not a child of this one), except CLAUDE_CONFIG_DIR, which picks your account's profile.
 // No API key either, so it plays on the subscription, never on paid API. Claude Code's memory and
 // CLAUDE.md files are off too: a player started inside this repo was given the notes Claude Code
-// keeps about the project.
-function playerEnvironment(): Record<string, string> {
+// keeps about the project. And it doesn't update Claude Code while it plays: one that did left the
+// program it ran from half replaced (11 Nov 2026).
+export function playerEnvironment(from: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(process.env)) {
+  for (const [name, value] of Object.entries(from)) {
     if (value === undefined || name === "ANTHROPIC_API_KEY" || name === "ANTHROPIC_AUTH_TOKEN") continue;
     if (name.startsWith("CLAUDE") && name !== "CLAUDE_CONFIG_DIR") continue;
     env[name] = value;
   }
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
   env.CLAUDE_CODE_DISABLE_CLAUDE_MDS = "1";
+  env.DISABLE_AUTOUPDATER = "1";
   return env;
+}
+
+// Claude Code's arguments for a player, after any the program itself needs (findClaude's prefix): only
+// its MCP server's tools, never asking, with its brief as the system prompt.
+export function claudeArgs(spec: PlayerSpec, mcpConfig: string): string[] {
+  return [
+    "-p",
+    spec.prompt,
+    "--system-prompt",
+    spec.brief,
+    ...(spec.model ? ["--model", spec.model] : []),
+    "--tools",
+    "", // no built-in tools at all
+    "--mcp-config",
+    mcpConfig,
+    "--strict-mcp-config", // only our server
+    "--allowedTools",
+    `mcp__${SERVER_NAME}__*`,
+    "--permission-mode",
+    "dontAsk", // anything else is refused, never asked about
+    "--setting-sources",
+    "project", // the project is an empty folder outside this repo, so none of your settings or hooks load
+    "--max-turns",
+    String(spec.session.settings.maxTurns),
+    "--no-session-persistence",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+  ];
 }
 
 export function launchClaudePlayer(spec: PlayerSpec): Player {
@@ -96,30 +128,7 @@ export function launchClaudePlayer(spec: PlayerSpec): Player {
     const claude = findClaude();
     const mcpConfig = join(spec.dir, "mcp.json");
     await writeFile(mcpConfig, `${JSON.stringify({ mcpServers: { [SERVER_NAME]: { type: "stdio", ...spec.server } } }, null, 2)}\n`);
-    const args = [
-      ...claude.prefix,
-      "-p",
-      spec.prompt,
-      "--system-prompt",
-      spec.brief,
-      "--tools",
-      "", // no built-in tools at all
-      "--mcp-config",
-      mcpConfig,
-      "--strict-mcp-config", // only our server
-      "--allowedTools",
-      `mcp__${SERVER_NAME}__*`,
-      "--permission-mode",
-      "dontAsk", // anything else is refused, never asked about
-      "--setting-sources",
-      "project", // the project is an empty folder outside this repo, so none of your settings or hooks load
-      "--max-turns",
-      String(spec.session.settings.maxTurns),
-      "--no-session-persistence",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-    ];
+    const args = [...claude.prefix, ...claudeArgs(spec, mcpConfig)];
     const expectedTools = spec.session.settings.tools.map((tool) => `mcp__${SERVER_NAME}__${tool}`).sort();
 
     // The player works in an empty folder of its own, outside this repo, so Claude Code doesn't treat

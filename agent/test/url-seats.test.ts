@@ -7,7 +7,20 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { afterEach, describe, expect, it } from "vitest";
 import { matchFromFlags, seatSession } from "../src/match.ts";
 import type { Side } from "../src/session.ts";
-import { AGY_SETTINGS, agyLauncher, claudeLauncher, joinLines, openUrlSeats, seatFolderFiles, type SeatSpec, type UrlSeats } from "../src/url-seats.ts";
+import {
+  agentsFile,
+  agyLauncher,
+  agySettings,
+  claudeLauncher,
+  claudeSettings,
+  joinLines,
+  openUrlSeats,
+  seatFolderFiles,
+  seatTools,
+  windowCommand,
+  type SeatSpec,
+  type UrlSeats,
+} from "../src/url-seats.ts";
 import { sleep } from "../src/mcp/shared.ts";
 import { fixture, fixtureAt } from "./fixtures/fixture.ts";
 import { StandInGame } from "./stand-in-game.ts";
@@ -149,29 +162,73 @@ describe("joining a URL seat", () => {
     ]);
   });
 
-  it("writes the seat's link into its folder for Antigravity, VS Code and Cursor, each in its own format", () => {
-    const files = seatFolderFiles(url);
-    expect(Object.keys(files).sort()).toEqual([".agents/mcp_config.json", ".cursor/mcp.json", ".vscode/mcp.json"]);
+  it("lists the seat's brief, then each of its tools with the arguments it takes, for AGENTS.md", async () => {
+    const spec: SeatSpec = {
+      settings: seatSession(match, "zombies", false),
+      brief: "the zombies' brief",
+      context: { game: new StandInGame(fixture("1-9-versus-midgame")), clock: "realtime", speed: 1, log: () => {} },
+    };
+    const tools = await seatTools(spec);
+    expect(tools.map((tool) => tool.name)).toEqual(["get_state", "send_zombie", "wait"]);
+    const agents = agentsFile("The zombies' brief.\n", tools);
+    expect(agents.startsWith("The zombies' brief.\n\n## Your tools\n\n### get_state\n")).toBe(true);
+    expect(agents).toContain("### get_state\n\nShows your points");
+    expect(agents).toContain("### send_zombie\n\nSends one of the level's zombies");
+    expect(agents).toContain("- `zombie` (text, required): The zombie's name as get_state lists it, e.g. conehead_zombie.\n");
+    expect(agents).toContain("- `row` (whole number from 0 to 5, required): Row, counting from 0 at the top.\n");
+    expect(agents).toContain("- `col` (whole number from 0 to 8, optional): Only for bungee_zombie");
+    expect(agents).toContain("- `seconds` (number from 0.1 to 30, required): Seconds of game time, from 0.1 to 30.\n");
+    expect(agents.split("It takes no arguments.").length - 1).toBe(1); // get_state's
+    expect(agents.endsWith("from 0.1 to 30.\n")).toBe(true);
+  });
+
+  it("writes the seat's link into its folder for Antigravity, VS Code and Cursor, each in its own format, AGENTS.md, and Antigravity's player agent", () => {
+    const files = seatFolderFiles(url, "The zombies' brief and tools.\n", "zombies");
+    expect(Object.keys(files).sort()).toEqual([".agents/agents/pvz-zombies.md", ".agents/mcp_config.json", ".cursor/mcp.json", ".vscode/mcp.json", "AGENTS.md"]);
+    // Antigravity puts AGENTS.md into its model's instructions itself, as its player can't read files.
+    expect(files["AGENTS.md"]).toBe("The zombies' brief and tools.\n");
+    // Its chat hands the game to this helper agent, which has only the seat's tools and the brief as its instructions.
+    expect(files[".agents/agents/pvz-zombies.md"]).toBe(
+      [
+        "---",
+        "name: pvz-zombies",
+        "description: Plays the zombies in this Plants vs. Zombies match with the game's tools. Hand it the whole game.",
+        "mainAgent: false",
+        "subagent: true",
+        "tools: []",
+        "---",
+        "",
+        "The zombies' brief and tools.\n",
+      ].join("\n"),
+    );
     expect(JSON.parse(files[".agents/mcp_config.json"]!)).toEqual({ mcpServers: { pvz: { serverUrl: url } } });
     expect(JSON.parse(files[".vscode/mcp.json"]!)).toEqual({ servers: { pvz: { type: "http", url } } });
     expect(JSON.parse(files[".cursor/mcp.json"]!)).toEqual({ mcpServers: { pvz: { url } } });
   });
 
   it("opens Claude Code locked down to the seat, as the players pnpm match launches are", () => {
-    const lines = claudeLauncher(["C:\\bin\\claude.exe"], "C:\\runs\\match\\zombies\\mcp.json", folder, "zombies", 'Play the zombies: 100% "now".').split("\r\n");
+    const lines = claudeLauncher(["C:\\bin\\claude.exe"], "C:\\runs\\match\\zombies\\mcp.json", "C:\\runs\\match\\zombies\\claude-settings.json", folder, "zombies", 'Play the zombies: 100% "now".').split("\r\n");
     expect(lines).toEqual([
       "@echo off",
       "rem Opens Claude Code to play the zombies at its seat in this match, locked down to the seat's tools.",
       "setlocal",
+      `for /f "delims==" %%v in ('set CLAUDE 2^>nul') do if /i not "%%v"=="CLAUDE_CONFIG_DIR" set "%%v="`,
       "set ANTHROPIC_API_KEY=",
       "set ANTHROPIC_AUTH_TOKEN=",
       "set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1",
       "set CLAUDE_CODE_DISABLE_CLAUDE_MDS=1",
+      "set DISABLE_AUTOUPDATER=1",
       'if not exist "C:\\seats\\zombies" mkdir "C:\\seats\\zombies"',
       'cd /d "C:\\seats\\zombies"',
-      '"C:\\bin\\claude.exe" --tools "" --mcp-config "C:\\runs\\match\\zombies\\mcp.json" --strict-mcp-config --allowedTools "mcp__pvz__*" --permission-mode dontAsk --setting-sources project "Play the zombies: 100%% \'now\'."',
+      '"C:\\bin\\claude.exe" --settings "C:\\runs\\match\\zombies\\claude-settings.json" --tools "" --mcp-config "C:\\runs\\match\\zombies\\mcp.json" --strict-mcp-config --allowedTools "mcp__pvz__*" --permission-mode dontAsk --setting-sources project "Play the zombies: 100%% \'now\'."',
       "",
     ]);
+  });
+
+  it("holds each of the chat's messages back 2 s, so its first one has the seat's tools", () => {
+    expect(JSON.parse(claudeSettings("C:\\Program Files\\nodejs\\node.exe"))).toEqual({
+      hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: '"C:/Program Files/nodejs/node.exe" -e "setTimeout(() => {}, 2000)"' }] }] },
+    });
   });
 
   it("opens Antigravity CLI in the seat's folder, with the seat's tools allowed and its own refused", () => {
@@ -182,11 +239,29 @@ describe("joining a URL seat", () => {
       "setlocal",
       'if not exist "C:\\seats\\zombies" mkdir "C:\\seats\\zombies"',
       'cd /d "C:\\seats\\zombies"',
-      '"C:\\bin\\agy.exe" --settings "C:\\runs\\match\\zombies\\agy-settings.json" -i "Play the zombies."',
+      // Its first message hands the game to the seat's player agent.
+      '"C:\\bin\\agy.exe" --settings "C:\\runs\\match\\zombies\\agy-settings.json" -i "Hand the whole game to the pvz-zombies agent, with this task, and tell me what it does: Play the zombies."',
       "",
     ]);
-    expect(JSON.parse(AGY_SETTINGS)).toEqual({
+    // The seat's folder is trusted for the session, so its seat loads as the chat starts.
+    expect(JSON.parse(agySettings(folder))).toEqual({
       permissions: { allow: ["mcp(pvz/*)"], deny: ["command(*)", "read_file(*)", "write_file(*)", "read_url(*)", "execute_url(*)"] },
+      trustedWorkspaces: [folder],
     });
+  });
+
+  it("gives Claude Code and Antigravity CLI the model picked for the side, if any (D61)", () => {
+    const claude = claudeLauncher(["C:\\bin\\claude.exe"], "C:\\runs\\match\\zombies\\mcp.json", "C:\\runs\\match\\zombies\\claude-settings.json", folder, "zombies", "Play the zombies.", "opus").split("\r\n");
+    expect(claude.at(-2)).toBe(
+      '"C:\\bin\\claude.exe" --model "opus" --settings "C:\\runs\\match\\zombies\\claude-settings.json" --tools "" --mcp-config "C:\\runs\\match\\zombies\\mcp.json" --strict-mcp-config --allowedTools "mcp__pvz__*" --permission-mode dontAsk --setting-sources project "Play the zombies."',
+    );
+    const agy = agyLauncher("C:\\bin\\agy.exe", "C:\\runs\\match\\zombies\\agy-settings.json", folder, "zombies", "Play the zombies.", "gpt-oss-120b-medium").split("\r\n");
+    expect(agy.at(-2)).toBe(
+      '"C:\\bin\\agy.exe" --settings "C:\\runs\\match\\zombies\\agy-settings.json" --model "gpt-oss-120b-medium" -i "Hand the whole game to the pvz-zombies agent, with this task, and tell me what it does: Play the zombies."',
+    );
+  });
+
+  it("opens a launcher in a window of its own, titled after its side and app (D60)", () => {
+    expect(windowCommand("pvz-lab zombies: Antigravity CLI", "C:\\runs\\a match\\zombies\\agy.cmd")).toBe('start "pvz-lab zombies: Antigravity CLI" "C:\\runs\\a match\\zombies\\agy.cmd"');
   });
 });

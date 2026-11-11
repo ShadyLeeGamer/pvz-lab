@@ -24,6 +24,7 @@ interface Joined {
   instructions?: string;
   prompt: string;
   brief: string;
+  model?: string;
 }
 
 // Every tool says so once the level is over, from either side.
@@ -52,7 +53,7 @@ function scripted(scripts: Partial<Record<Side, Script>>, joined: Partial<Record
       const client = new Client({ name: "scripted", version: "test" });
       await client.connect(new StdioClientTransport({ ...spec.server, env: { ...env, ...spec.server.env }, stderr: "ignore" }));
       const tools = (await client.listTools()).tools.map((tool) => tool.name).sort();
-      joined[spec.side] = { tools, instructions: client.getInstructions(), prompt: spec.prompt, brief: spec.brief };
+      joined[spec.side] = { tools, instructions: client.getInstructions(), prompt: spec.prompt, brief: spec.brief, model: spec.model };
       markReady(true);
       let toolCalls = 0;
       const call: Call = (name, args) => {
@@ -129,7 +130,7 @@ describe("matches with scripted players (launch the game; need agent/.env)", () 
       },
     };
     const printed: string[] = [];
-    const { runDir, result } = await runMatch(matchFromFlags(["1-9", "--plants", "claude", "--zombies", "claude", "--speed", "50"]), {
+    const { runDir, result } = await runMatch(matchFromFlags(["1-9", "--plants", "claude", "--zombies", "claude", "--zombies-model", "sonnet", "--speed", "50"]), {
       launchPlayer: scripted(scripts, joined),
       print: (line) => printed.push(line),
       runsDir,
@@ -144,6 +145,9 @@ describe("matches with scripted players (launch the game; need agent/.env)", () 
     expect(joined.zombies?.brief).toContain("You are playing the zombies in Plants vs. Zombies, Adventure level 1-9");
     expect(joined.plants?.prompt).toMatch(/^Choose your seed packets with choose_seeds, then play the level\. The street shows the zombies coming in this level: /);
     expect(choices).toContain("Call choose_seeds again with the 6 you pick.");
+    // The zombies' player got the model picked for it (D61); the plants', Claude Code's default.
+    expect(joined.zombies?.model).toBe("sonnet");
+    expect(joined.plants?.model).toBeUndefined();
 
     // The host ran game time once both were up, told of the paydays, and played on once the zombies stopped.
     expect(printed).toContain("Starting level 1-9 in versus...");
@@ -156,17 +160,21 @@ describe("matches with scripted players (launch the game; need agent/.env)", () 
     expect(result.winner).toBe(result.outcome === "won" ? "plants" : "zombies");
     expect(result.players.zombies).toMatchObject({ stoppedBeforeTheEnd: true, finish: "script ended" });
     expect(result.players.plants).toMatchObject({ stoppedBeforeTheEnd: false });
+    expect(result.models).toEqual({ zombies: "sonnet" });
     expect(JSON.parse(readFileSync(join(runDir, "result.json"), "utf8"))).toEqual(result);
     expect(lines(join(runDir, "plants", "moves.jsonl")).map((move) => move.tool)).toContain("choose_seeds");
     expect(lines(join(runDir, "zombies", "moves.jsonl")).filter((move) => move.tool === "send_zombie" && !move.error).length).toBeGreaterThan(0);
     expect(JSON.parse(readFileSync(join(runDir, "plants", "session.json"), "utf8")).tools).toContain("choose_seeds");
-    expect(printed.at(-1)).toMatch(/^Result: level 1-9: the (plants|zombies) won\. Plants: \d+ tool calls\. Zombies: \d+ tool calls, stopped before the end \(script ended\)\.$/);
+    expect(printed.at(-1)).toMatch(/^Result: level 1-9: the (plants|zombies) won\. Plants: \d+ tool calls\. Zombies \(sonnet\): \d+ tool calls, stopped before the end \(script ended\)\.$/);
   }, 300_000);
 
-  it("plays 1-9 in versus with both seats taken by URL, starting game time once both players have moved since play began (D56)", async () => {
+  it("plays 1-9 in versus with the plants at a URL seat and the zombies' agy player in a window, starting game time once both players have moved since play began (D56, D60)", async () => {
     const printed: string[] = [];
     const seatsDir = join(runsDir, "seats");
-    const match = runMatch(matchFromFlags(["1-9", "--plants", "url", "--zombies", "url", "--speed", "50"]), { print: (line) => printed.push(line), runsDir, seatsDir });
+    // The zombies' window is noted instead of opened, and a scripted player takes their seat by its link.
+    const opened: { title: string; launcher: string }[] = [];
+    const settings = matchFromFlags(["1-9", "--plants", "url", "--zombies", "agy", "--windows", "--zombies-model", "gemini-3.8-flash-low", "--speed", "50"]);
+    const match = runMatch(settings, { print: (line) => printed.push(line), runsDir, seatsDir, openWindow: (title, launcher) => opened.push({ title, launcher }) });
     // The link the host prints for a seat, once it has.
     const link = async (side: Side): Promise<string> => {
       const label = `The ${side}' seat: `;
@@ -215,20 +223,39 @@ describe("matches with scripted players (launch the game; need agent/.env)", () 
     expect(printed).toContain("[zombies]   -> get_state {}");
     expect(printed).toContain("Game time is running at 50x.");
 
+    // Only the zombies' player got a window: Antigravity CLI, with the model picked for them. The plants'
+    // seat says how to join it instead.
+    expect(opened).toEqual([{ title: "pvz-lab zombies: Antigravity CLI", launcher: join(runDir, "zombies", "agy.cmd") }]);
+    expect(printed).toContain(`  Opening Antigravity CLI in a window of its own. To open it again, run ${join(runDir, "zombies", "agy.cmd")} in a new terminal.`);
+    expect(printed).toContain(`  Claude Code, locked down to this seat: run ${join(runDir, "plants", "claude.cmd")} in a new terminal.`);
+    expect(printed).not.toContain(`  Claude Code, locked down to this seat: run ${join(runDir, "zombies", "claude.cmd")} in a new terminal.`);
+    expect(readFileSync(join(runDir, "zombies", "agy.cmd"), "utf8")).toContain(' --model "gemini-3.8-flash-low" ');
+    expect(JSON.parse(readFileSync(join(runDir, "zombies", "agy-settings.json"), "utf8")).trustedWorkspaces).toEqual([join(seatsDir, "zombies")]);
+    expect(readFileSync(join(runDir, "zombies", "claude.cmd"), "utf8")).not.toContain("--model");
+    expect(result).toMatchObject({ plants: "url", zombies: "agy", models: { zombies: "gemini-3.8-flash-low" } });
+
     // The level was decided, and the run folder holds each seat's moves and the command for Claude Code.
     expect(["won", "lost"]).toContain(result.outcome);
     expect(result.players.plants).toMatchObject({ app: "url-plants test", stoppedBeforeTheEnd: false });
     expect(result.players.zombies).toMatchObject({ app: "url-zombies test", stoppedBeforeTheEnd: false });
     expect(lines(join(runDir, "plants", "moves.jsonl"))[0].tool).toBe("choose_seeds");
     expect(lines(join(runDir, "zombies", "moves.jsonl")).length).toBe(result.players.zombies!.toolCalls);
-    expect(JSON.parse(readFileSync(join(runDir, "zombies", "mcp.json"), "utf8")).mcpServers.pvz.url).toBe(await link("zombies"));
-    expect(readFileSync(join(runDir, "zombies", "claude.cmd"), "utf8")).toContain("--strict-mcp-config");
-    // Each seat's own folder has this match's link, for apps that play from it, such as Antigravity CLI.
+    // claude.cmd's seat, which Claude Code waits for before a chat's first message (alwaysLoad).
+    expect(JSON.parse(readFileSync(join(runDir, "zombies", "mcp.json"), "utf8")).mcpServers.pvz).toEqual({ type: "http", url: await link("zombies"), alwaysLoad: true });
+    expect(readFileSync(join(runDir, "zombies", "claude.cmd"), "utf8")).toContain(`--settings "${join(runDir, "zombies", "claude-settings.json")}" --tools ""`);
+    expect(JSON.parse(readFileSync(join(runDir, "zombies", "claude-settings.json"), "utf8")).hooks.UserPromptSubmit).toHaveLength(1);
+    // Each seat's own folder has this match's link and its side's brief, for apps that play from it, such as Antigravity CLI.
     for (const side of ["plants", "zombies"] as const) {
       expect(JSON.parse(readFileSync(join(seatsDir, side, ".agents", "mcp_config.json"), "utf8")).mcpServers.pvz.serverUrl).toBe(await link(side));
+      const agents = readFileSync(join(seatsDir, side, "AGENTS.md"), "utf8");
+      expect(agents.startsWith(`${readFileSync(join(runDir, side, "brief.md"), "utf8").trimEnd()}\n\n## Your tools\n`)).toBe(true);
+      expect(agents).toContain(side === "plants" ? "### choose_seeds" : "### send_zombie");
+      // Antigravity's chat hands the game to the seat's player agent, whose instructions are the same.
+      expect(readFileSync(join(seatsDir, side, ".agents", "agents", `pvz-${side}.md`), "utf8")).toContain(`name: pvz-${side}\n`);
+      expect(readFileSync(join(runDir, side, "agy.cmd"), "utf8")).toContain(`-i "Hand the whole game to the pvz-${side} agent`);
       expect(readFileSync(join(runDir, side, "agy.cmd"), "utf8")).toContain(`cd /d "${join(seatsDir, side)}"`);
     }
-    expect(printed.at(-1)).toMatch(/^Result: level 1-9: the (plants|zombies) won\. Plants \(url-plants test\): \d+ tool calls\. Zombies \(url-zombies test\): \d+ tool calls\.$/);
+    expect(printed.at(-1)).toMatch(/^Result: level 1-9: the (plants|zombies) won\. Plants \(url-plants test\): \d+ tool calls\. Zombies \(url-zombies test, gemini-3\.8-flash-low\): \d+ tool calls\.$/);
   }, 300_000);
 
   it("plays a play session as before: 1-8 with its own seeds against the level, until its player stops", async () => {

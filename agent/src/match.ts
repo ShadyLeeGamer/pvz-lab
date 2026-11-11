@@ -1,13 +1,15 @@
 // The host: plays one Adventure level with a player on each side, from the start to the result.
-//   pnpm match <level> --plants human|claude|url --zombies level|claude|url [--speed n]
+//   pnpm match <level> --plants human|claude|agy|url --zombies level|claude|agy|url [--windows]
+//     [--plants-model <name>] [--zombies-model <name>] [--speed n]
 // On the plants' side, "human" is you in the game window. On the zombies' side, "level" is the level's
 // own waves; any player makes it a versus level. A Claude player is Claude Code, locked down to its
 // side's MCP tools (player.ts). A "url" seat is a link that any MCP app on this PC can play through
-// (url-seats.ts). pnpm play runs a session file through the same code: Claude on the plants, against the
-// level.
+// (url-seats.ts). With --windows, each Claude or agy (Antigravity CLI) player plays in a chat window of
+// its own, at a URL seat. pnpm play runs a session file through the same code: Claude on the plants,
+// against the level.
 // Everything lands in runs/<time>-<name>/: result.json, and for each player a folder named after its
 // side, with its session, brief, MCP config and every tool call (moves.jsonl), and Claude Code's output
-// for a Claude player or a command that opens Claude Code at a URL seat.
+// for a Claude player in the terminal, or the commands that open Claude Code or Antigravity CLI at a URL seat.
 import { appendFileSync, existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -23,13 +25,17 @@ import { LEVEL_OVER, normalizeName, sleep } from "./mcp/shared.ts";
 import { findClaude, launchClaudePlayer, type LaunchPlayer, type Player, type PlayerEnd } from "./player.ts";
 import { loadSession, MAX_SPEED, Session, SIDES, type LoadedSession, type Side } from "./session.ts";
 import {
-  AGY_SETTINGS,
+  agentsFile,
   agyLauncher,
+  agySettings,
   claudeLauncher,
+  claudeSettings,
   findAgy,
   joinLines,
   openUrlSeats,
+  openWindow,
   seatFolderFiles,
+  seatTools,
   type SeatSpec,
   type UrlSeat,
   type UrlSeats,
@@ -45,8 +51,14 @@ const REMIND_MS = 30_000;
 
 export interface MatchSettings {
   level: number | string;
-  plants: "human" | "claude" | "url";
-  zombies: "level" | "claude" | "url";
+  plants: "human" | "claude" | "agy" | "url";
+  zombies: "level" | "claude" | "agy" | "url";
+  // Each Claude or agy player in a chat window of its own, at a URL seat (D60). Without it, a Claude
+  // player plays in this terminal, and agy can't play.
+  windows: boolean;
+  // The model each side's Claude or agy player plays with, as its app names it (D61); the app's own
+  // default for a side left out.
+  models: Partial<Record<Side, string>>;
   speed: number;
   // Matches run in real time (D31). A play session can pause the game while Claude thinks instead.
   clock: "waits" | "realtime";
@@ -56,12 +68,23 @@ export interface MatchSettings {
 }
 
 const USAGE =
-  "usage: pnpm match <level> --plants human|claude|url --zombies level|claude|url [--speed 1-50], e.g. pnpm match 1-9 --plants claude --zombies claude";
+  "usage: pnpm match <level> --plants human|claude|agy|url --zombies level|claude|agy|url [--windows] [--plants-model <name>] [--zombies-model <name>] [--speed 1-50], e.g. pnpm match 1-9 --plants claude --zombies agy --windows";
 
 export function matchFromFlags(args: string[]): MatchSettings {
   let parsed;
   try {
-    parsed = parseArgs({ args, allowPositionals: true, options: { plants: { type: "string" }, zombies: { type: "string" }, speed: { type: "string" } } });
+    parsed = parseArgs({
+      args,
+      allowPositionals: true,
+      options: {
+        plants: { type: "string" },
+        zombies: { type: "string" },
+        windows: { type: "boolean" },
+        "plants-model": { type: "string" },
+        "zombies-model": { type: "string" },
+        speed: { type: "string" },
+      },
+    });
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${USAGE}`);
   }
@@ -69,13 +92,27 @@ export function matchFromFlags(args: string[]): MatchSettings {
   const [level] = positionals;
   if (positionals.length !== 1 || !level || !/^[1-5]-([1-9]|10)$/.test(level)) throw new Error(`name one level, from 1-1 to 5-10\n${USAGE}`);
   const { plants, zombies } = values;
-  if (plants !== "human" && plants !== "claude" && plants !== "url") throw new Error(`--plants must be human, claude or url\n${USAGE}`);
-  if (zombies !== "level" && zombies !== "claude" && zombies !== "url") throw new Error(`--zombies must be level, claude or url\n${USAGE}`);
+  if (plants !== "human" && plants !== "claude" && plants !== "agy" && plants !== "url") throw new Error(`--plants must be human, claude, agy or url\n${USAGE}`);
+  if (zombies !== "level" && zombies !== "claude" && zombies !== "agy" && zombies !== "url") throw new Error(`--zombies must be level, claude, agy or url\n${USAGE}`);
+  const windows = values.windows === true;
+  const app = { plants, zombies };
+  const hasApp = (side: Side) => app[side] === "claude" || app[side] === "agy";
+  if (!windows && (plants === "agy" || zombies === "agy")) throw new Error(`agy plays in a chat window of its own, so add --windows\n${USAGE}`);
+  if (windows && !SIDES.some(hasApp)) throw new Error(`--windows opens claude and agy players in chat windows of their own, and this match has none\n${USAGE}`);
+  const models: Partial<Record<Side, string>> = {};
+  for (const side of SIDES) {
+    const model = values[`${side}-model`];
+    if (model === undefined) continue;
+    if (!hasApp(side)) throw new Error(`--${side}-model picks a claude or agy player's model, and the ${side} have none\n${USAGE}`);
+    // A name goes into a command file as it is, so it may hold only the characters model names use.
+    if (!/^[\w.:[\]-]+$/.test(model)) throw new Error(`--${side}-model takes a model's name, such as opus or gemini-3.8-flash-high`);
+    models[side] = model;
+  }
   const speed = values.speed === undefined ? 1 : Number(values.speed);
   if (!Number.isInteger(speed) || speed < 1 || speed > MAX_SPEED) throw new Error(`--speed must be a whole number from 1 to ${MAX_SPEED}\n${USAGE}`);
   // A person plays at the game's own speed (R34).
   if (plants === "human" && speed !== 1) throw new Error("with --plants human the game runs at normal speed, so leave out --speed");
-  return { level, plants, zombies, speed, clock: "realtime", name: `match-${level}` };
+  return { level, plants, zombies, windows, models, speed, clock: "realtime", name: `match-${level}` };
 }
 
 export function matchFromSession(session: LoadedSession): MatchSettings {
@@ -87,7 +124,21 @@ export function matchFromSession(session: LoadedSession): MatchSettings {
   if (level === undefined) {
     throw new Error(`${file} lets the player pick levels with start_level, which is for chat apps (see the README). pnpm play needs a session with a "level".`);
   }
-  return { level, plants: "claude", zombies: "level", speed, clock, plantsSession: session, name: basename(session.path, ".json") };
+  return { level, plants: "claude", zombies: "level", windows: false, models: {}, speed, clock, plantsSession: session, name: basename(session.path, ".json") };
+}
+
+// Where each side's player plays (D60): a Claude player in this terminal, unless --windows opens it, or
+// an agy player, in a chat window of its own at a URL seat; at a URL seat that any app takes by its link
+// (url). A side with no player (you, or the level's waves) has no place here.
+export type PlayerPlace = "terminal" | "window" | "link";
+export function playerPlaces(settings: Pick<MatchSettings, "plants" | "zombies" | "windows">): Partial<Record<Side, PlayerPlace>> {
+  const places: Partial<Record<Side, PlayerPlace>> = {};
+  for (const side of SIDES) {
+    const who = settings[side];
+    if (who === "url") places[side] = "link";
+    else if (who === "claude" || who === "agy") places[side] = settings.windows ? "window" : "terminal";
+  }
+  return places;
 }
 
 // The session the host writes for one side's player in a match, launched or at a URL seat. The plants
@@ -102,6 +153,7 @@ export function seatSession(settings: MatchSettings, side: Side, chooser: boolea
 
 export interface MatchOptions {
   launchPlayer?: LaunchPlayer; // the end-to-end tests play with scripted players instead of Claude Code
+  openWindow?: typeof openWindow; // and note the windows --windows would open, instead of opening them
   print?: (line: string) => void;
   runsDir?: string;
   seatsDir?: string; // where URL seats' own folders go: PVZ_SEATS_DIR in agent/.env, else a temporary folder
@@ -120,6 +172,7 @@ export interface MatchResult {
   level: number | string;
   plants: MatchSettings["plants"];
   zombies: MatchSettings["zombies"];
+  models?: MatchSettings["models"]; // the models picked for its players, if any
   outcome: string; // the plants' result: won, lost, unfinished, stopped or unknown
   winner: Side | null;
   players: Partial<Record<Side, PlayerResult>>;
@@ -144,8 +197,8 @@ function resultLine(result: MatchResult): string {
     const player = result.players[side];
     if (!player) return [];
     const stopped = player.stoppedBeforeTheEnd ? `, stopped before the end (${player.finish ?? `exit code ${player.claudeExitCode}`})` : "";
-    const app = player.app ? ` (${player.app})` : "";
-    return [`${side === "plants" ? "Plants" : "Zombies"}${app}: ${plural(player.toolCalls, "tool call")}${stopped}.`];
+    const about = [player.app, result.models?.[side]].filter(Boolean).join(", ");
+    return [`${side === "plants" ? "Plants" : "Zombies"}${about ? ` (${about})` : ""}: ${plural(player.toolCalls, "tool call")}${stopped}.`];
   });
   return [`Result: level ${result.level}: ${what}.`, ...players].join(" ");
 }
@@ -182,8 +235,12 @@ export async function runMatch(settings: MatchSettings, options: MatchOptions = 
   const { launchPlayer = launchClaudePlayer, print = (line: string) => console.log(line), signal } = options;
   const { level, speed, clock } = settings;
   const versus = settings.zombies !== "level";
-  const playerSides = SIDES.filter((side) => settings[side] === "claude" || settings[side] === "url");
-  const urlSides = SIDES.filter((side) => settings[side] === "url");
+  const places = playerPlaces(settings);
+  const launched = (side: Side) => places[side] === "terminal";
+  const inWindow = (side: Side) => places[side] === "window";
+  const playerSides = SIDES.filter((side) => places[side] !== undefined);
+  // A player in a window joins at a URL seat, as one you open yourself does.
+  const urlSides = SIDES.filter((side) => places[side] === "window" || places[side] === "link");
   // Each line is marked with its side when two players share the terminal. While a person plays, the
   // other side's words and moves only go to the run folder (D33).
   const label = (side: Side) => (playerSides.length === 2 ? `[${side}] ` : "");
@@ -249,6 +306,7 @@ export async function runMatch(settings: MatchSettings, options: MatchOptions = 
         session,
         brief,
         prompt,
+        model: settings.models[side],
         dir,
         server: {
           command: process.execPath,
@@ -272,8 +330,8 @@ export async function runMatch(settings: MatchSettings, options: MatchOptions = 
       settled.push(player.done.catch(failed).then(ended));
     };
 
-    // Opens the URL seats and says how to join each one. A seat's player plays through the host's own
-    // MCP server for it, so the host logs and shows its moves.
+    // Opens the URL seats, and for each one opens its player's window (--windows) or says how to join it.
+    // A seat's player plays through the host's own MCP server for it, so the host logs and shows its moves.
     const openSeats = async (chooser: boolean, street: string): Promise<void> => {
       const specs = new Map<Side, SeatSpec>();
       const prompts = new Map<Side, { dir: string; prompt: string }>();
@@ -294,20 +352,36 @@ export async function runMatch(settings: MatchSettings, options: MatchOptions = 
       const seatsDir = options.seatsDir ?? process.env.PVZ_SEATS_DIR ?? join(tmpdir(), "pvz-lab-seats");
       for (const seat of urlSeats.seats.values()) {
         const { dir, prompt } = prompts.get(seat.side)!;
-        // The seat's own folder, outside this repo, where any app plays from; each match writes its link there.
+        // The seat's own folder, outside this repo, where any app plays from; each match writes its link
+        // and brief there.
         const folder = join(seatsDir, seat.side);
-        for (const [file, content] of Object.entries(seatFolderFiles(seat.url))) {
+        const spec = specs.get(seat.side)!;
+        for (const [file, content] of Object.entries(seatFolderFiles(seat.url, agentsFile(spec.brief, await seatTools(spec)), seat.side))) {
           await mkdir(dirname(join(folder, file)), { recursive: true });
           await writeFile(join(folder, file), content);
         }
         const mcpConfig = join(dir, "mcp.json");
-        await writeFile(mcpConfig, `${JSON.stringify({ mcpServers: { pvz: { type: "http", url: seat.url } } }, null, 2)}\n`);
-        const agySettings = join(dir, "agy-settings.json");
-        await writeFile(agySettings, AGY_SETTINGS);
+        // alwaysLoad: Claude Code always shows the seat's tools, as a player has no tool search. (Its docs say it
+        // also waits for them before the first message, but a chat's first message still went without them,
+        // Claude Code 2.1.310, 11 Nov 2026.)
+        await writeFile(mcpConfig, `${JSON.stringify({ mcpServers: { pvz: { type: "http", url: seat.url, alwaysLoad: true } } }, null, 2)}\n`);
+        const agySettingsFile = join(dir, "agy-settings.json");
+        await writeFile(agySettingsFile, agySettings(folder));
         const launchers = { claude: join(dir, "claude.cmd"), agy: join(dir, "agy.cmd"), folder };
-        await writeFile(launchers.claude, claudeLauncher([claude.command, ...claude.prefix], mcpConfig, folder, seat.side, prompt));
-        await writeFile(launchers.agy, agyLauncher(findAgy(), agySettings, folder, seat.side, prompt));
-        for (const line of joinLines(seat.side, seat.url, launchers)) print(line);
+        // A model picked for the side is its own app's name for one, so only that app's command gets it.
+        const model = (app: "claude" | "agy") => (settings[seat.side] === app ? settings.models[seat.side] : undefined);
+        const claudeSettingsFile = join(dir, "claude-settings.json");
+        await writeFile(claudeSettingsFile, claudeSettings(process.execPath));
+        await writeFile(launchers.claude, claudeLauncher([claude.command, ...claude.prefix], mcpConfig, claudeSettingsFile, folder, seat.side, prompt, model("claude")));
+        await writeFile(launchers.agy, agyLauncher(findAgy(), agySettingsFile, folder, seat.side, prompt, model("agy")));
+        if (inWindow(seat.side)) {
+          const [app, launcher] = settings[seat.side] === "agy" ? ["Antigravity CLI", launchers.agy] : ["Claude Code", launchers.claude];
+          print(`The ${seat.side}' seat: ${seat.url}`);
+          print(`  Opening ${app} in a window of its own. To open it again, run ${launcher} in a new terminal.`);
+          (options.openWindow ?? openWindow)(`pvz-lab ${seat.side}: ${app}`, launcher, (error) =>
+            print(`  Couldn't open its window (${error.message}): run ${launcher} in a new terminal.`),
+          );
+        } else for (const line of joinLines(seat.side, seat.url, launchers)) print(line);
       }
       // Until a seat's player has made its first move, and again while the lobby waits for one.
       callsBefore = new Map([...urlSeats.seats.values()].map((seat) => [seat, seat.toolCalls]));
@@ -358,11 +432,11 @@ export async function runMatch(settings: MatchSettings, options: MatchOptions = 
       }
     } else {
       print(clock === "waits" ? `The game is paused while Claude thinks; each wait plays at ${speed}x.` : `Game time will run at ${speed}x.`);
-      if (settings.plants === "claude") await startPlayer("plants", chooser, street);
+      if (launched("plants")) await startPlayer("plants", chooser, street);
     }
 
-    const playing = lobbyFilled && (await waitForPlay(client, versus, () => givenUp() || (settings.plants === "claude" && ends.has("plants"))));
-    if (playing && settings.zombies === "claude") await startPlayer("zombies", false, street);
+    const playing = lobbyFilled && (await waitForPlay(client, versus, () => givenUp() || (launched("plants") && ends.has("plants"))));
+    if (playing && launched("zombies")) await startPlayer("zombies", false, street);
     // Game time starts once every Claude player is up, as pnpm play has always done, and every URL
     // seat's player has made a move since play began (D56), not just looked while the plants chose
     // their seeds. A person's game runs from the start.
@@ -431,6 +505,7 @@ export async function runMatch(settings: MatchSettings, options: MatchOptions = 
       level,
       plants: settings.plants,
       zombies: settings.zombies,
+      ...(Object.keys(settings.models).length > 0 ? { models: settings.models } : {}),
       outcome,
       winner: outcome === "won" ? "plants" : outcome === "lost" ? "zombies" : null,
       players: Object.fromEntries([
